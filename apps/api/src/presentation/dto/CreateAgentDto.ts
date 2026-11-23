@@ -7,6 +7,7 @@ export const createAgentSchema = z.object({
   provider: z.string().trim().min(1, "provider is required").max(60),
   model: z.string().trim().min(1, "model is required").max(120),
   enabledTools: z.array(z.string().trim().min(1)).optional().default([]),
+  documentIds: z.array(z.string().trim().min(1)).optional().default([]),
 });
 
 export type CreateAgentDto = z.infer<typeof createAgentSchema>;

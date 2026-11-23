@@ -7,6 +7,7 @@ export interface AgentProps {
   provider: string;
   model: string;
   enabledTools: string[];
+  documentIds?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -20,6 +21,7 @@ export interface CreateAgentInput {
   provider: string;
   model: string;
   enabledTools: string[];
+  documentIds?: string[];
   now?: Date;
 }
 
@@ -30,6 +32,7 @@ export interface UpdateAgentInput {
   provider?: string;
   model?: string;
   enabledTools?: string[];
+  documentIds?: string[];
   now?: Date;
 }
 
@@ -42,6 +45,7 @@ export class Agent {
   public provider: string;
   public model: string;
   public enabledTools: string[];
+  public documentIds: string[];
   public readonly createdAt: Date;
   public updatedAt: Date;
 
@@ -54,6 +58,7 @@ export class Agent {
     this.provider = props.provider;
     this.model = props.model;
     this.enabledTools = props.enabledTools;
+    this.documentIds = Agent.normalizeDocumentIds(props.documentIds);
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
   }
@@ -61,6 +66,12 @@ export class Agent {
   private static normalizeTools(tools: string[]): string[] {
     return Array.from(
       new Set(tools.map((tool) => tool.trim()).filter(Boolean))
+    );
+  }
+
+  private static normalizeDocumentIds(documentIds?: string[]): string[] {
+    return Array.from(
+      new Set((documentIds ?? []).map((id) => id.trim()).filter(Boolean))
     );
   }
 
@@ -91,6 +102,7 @@ export class Agent {
 
     const timestamp = input.now ?? new Date();
     const uniqueTools = Agent.normalizeTools(input.enabledTools);
+    const uniqueDocumentIds = Agent.normalizeDocumentIds(input.documentIds);
 
     return new Agent({
       id: input.id.trim(),
@@ -101,6 +113,7 @@ export class Agent {
       provider,
       model,
       enabledTools: uniqueTools,
+      documentIds: uniqueDocumentIds,
       createdAt: timestamp,
       updatedAt: timestamp,
     });
@@ -145,6 +158,10 @@ export class Agent {
 
     if (input.enabledTools !== undefined) {
       this.enabledTools = Agent.normalizeTools(input.enabledTools);
+    }
+
+    if (input.documentIds !== undefined) {
+      this.documentIds = Agent.normalizeDocumentIds(input.documentIds);
     }
 
     this.updatedAt = input.now ?? new Date();

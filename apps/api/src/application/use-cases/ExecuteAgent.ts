@@ -86,7 +86,16 @@ export class ExecuteAgent {
             { toolCallId: call.id, arguments: call.arguments }
           );
 
-          const result = await this.toolExecutor.execute(call.name, call.arguments);
+          const result = await this.toolExecutor.execute(
+            call.name,
+            call.arguments,
+            agent.enabledTools,
+            {
+              userId: command.userId,
+              agentId: agent.id,
+              documentIds: agent.documentIds,
+            }
+          );
 
           execution.addTraceStep(
             "tool_result",

@@ -126,8 +126,8 @@ describe("CPF and Auth security flow", () => {
     );
 
     const user = await register.execute({
-      fullName: "Marco Antonio Dias Junior",
-      email: "marco@example.com",
+      fullName: "Test User",
+      email: "user@example.com",
       cpf: "529.982.247-25",
       password: "Password123",
     });
@@ -136,16 +136,16 @@ describe("CPF and Auth security flow", () => {
     expect(user.passwordHash.split(":")).toHaveLength(2);
 
     const session = await login.execute({
-      email: "marco@example.com",
+      email: "user@example.com",
       password: "Password123",
     });
     expect(session.rawSessionToken.length).toBeGreaterThan(20);
 
-    await requestReset.execute("marco@example.com");
+    await requestReset.execute("user@example.com");
     expect(sentCode).toMatch(/^\d{6}$/);
 
     await resetPassword.execute({
-      email: "marco@example.com",
+      email: "user@example.com",
       code: sentCode,
       newPassword: "NewPassword456",
     });

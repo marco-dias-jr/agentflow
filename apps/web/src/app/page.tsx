@@ -1,17 +1,27 @@
-﻿"use client";
+"use client";
 
-import { BrainCircuit, Check, Info, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { AuthGate } from "@/components/AuthGate";
+import { DocumentsPanel } from "@/components/DocumentsPanel";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { AlertBanner } from "@/components/ui/AlertBanner";
+import { BrandMark } from "@/components/ui/BrandMark";
+import { Button } from "@/components/ui/Button";
+import { Card, SurfaceInset } from "@/components/ui/Card";
+import { DocumentSelector } from "@/components/ui/DocumentSelector";
+import { FieldLabel, Input, Select, Textarea } from "@/components/ui/Input";
+import { ToolSelector } from "@/components/ui/ToolSelector";
 import {
   AgentDTO,
   createAgent,
   deleteAgent,
+  DocumentDTO,
   executeAgentPrompt,
   ExecutionDTO,
   getMe,
+  getUserFriendlyError,
   listAgents,
+  listDocuments,
   listExecutions,
   listModels,
   logoutAccount,
@@ -25,12 +35,19 @@ const AVAILABLE_TOOLS = [
   { id: "knowledge_search", label: "Knowledge Search" },
 ];
 
+function formatShortName(fullName?: string): string {
+  if (!fullName) return "";
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1]}` : parts[0] || "";
+}
+
 export default function AgentFlowPage() {
   const [currentUser, setCurrentUser] = useState<UserProfileDTO | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   const [agents, setAgents] = useState<AgentDTO[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [documents, setDocuments] = useState<DocumentDTO[]>([]);
   const [models, setModels] = useState<ModelOptionDTO[]>([]);
   const [executions, setExecutions] = useState<ExecutionDTO[]>([]);
   const [selectedExecutionId, setSelectedExecutionId] = useState<string>("");
@@ -47,6 +64,7 @@ export default function AgentFlowPage() {
     "calculator",
     "knowledge_search",
   ]);
+  const [createDocumentIds, setCreateDocumentIds] = useState<string[]>([]);
 
   // Edit selected agent state
   const [isEditing, setIsEditing] = useState(false);
@@ -56,6 +74,7 @@ export default function AgentFlowPage() {
   const [editProvider, setEditProvider] = useState("");
   const [editModel, setEditModel] = useState("");
   const [editTools, setEditTools] = useState<string[]>([]);
+  const [editDocumentIds, setEditDocumentIds] = useState<string[]>([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Chat prompt state
@@ -120,7 +139,24 @@ export default function AgentFlowPage() {
       }
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Unable to load models."
+        getUserFriendlyError(
+          err,
+          "We couldn't load the available AI models right now. Please try again shortly."
+        )
+      );
+    }
+  }
+
+  async function refreshDocuments() {
+    try {
+      const data = await listDocuments();
+      setDocuments(data);
+    } catch (err) {
+      setErrorMessage(
+        getUserFriendlyError(
+          err,
+          "We couldn't load your account documents right now. Please try again shortly."
+        )
       );
     }
   }
@@ -136,7 +172,10 @@ export default function AgentFlowPage() {
       }
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Unable to load agents."
+        getUserFriendlyError(
+          err,
+          "We couldn't load your agents right now. Please check your connection and try again."
+        )
       );
     }
   }
@@ -159,7 +198,10 @@ export default function AgentFlowPage() {
       }
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Unable to load execution history."
+        getUserFriendlyError(
+          err,
+          "We couldn't load the execution history for this agent right now."
+        )
       );
     }
   }
@@ -192,6 +234,7 @@ export default function AgentFlowPage() {
     if (!currentUser) return;
     void refreshModels();
     void refreshAgents();
+    void refreshDocuments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
@@ -210,6 +253,9 @@ export default function AgentFlowPage() {
     setCurrentUser(null);
     setAgents([]);
     setSelectedAgentId("");
+    setDocuments([]);
+    setCreateDocumentIds([]);
+    setEditDocumentIds([]);
     setExecutions([]);
     setSelectedExecutionId("");
     setModels([]);
@@ -237,6 +283,7 @@ export default function AgentFlowPage() {
     setEditProvider(agent.provider);
     setEditModel(agent.model);
     setEditTools(agent.enabledTools);
+    setEditDocumentIds(agent.documentIds ?? []);
     setIsEditing(true);
   }
 
@@ -254,6 +301,31 @@ export default function AgentFlowPage() {
         ? prev.filter((item) => item !== toolId)
         : [...prev, toolId]
     );
+  }
+
+  function toggleCreateDocument(docId: string) {
+    setCreateDocumentIds((prev) =>
+      prev.includes(docId)
+        ? prev.filter((item) => item !== docId)
+        : [...prev, docId]
+    );
+  }
+
+  function toggleEditDocument(docId: string) {
+    setEditDocumentIds((prev) =>
+      prev.includes(docId)
+        ? prev.filter((item) => item !== docId)
+        : [...prev, docId]
+    );
+  }
+
+  function handleDocumentUploaded(doc: DocumentDTO) {
+    setDocuments((prev) => {
+      if (prev.some((item) => item.id === doc.id)) {
+        return prev;
+      }
+      return [doc, ...prev];
+    });
   }
 
   async function handleCreateAgent(e: FormEvent) {
@@ -274,13 +346,18 @@ export default function AgentFlowPage() {
         provider,
         model,
         enabledTools,
+        documentIds: createDocumentIds,
       });
       setName("");
       setDescription("");
+      setCreateDocumentIds([]);
       await refreshAgents(created.id);
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Failed to create agent."
+        getUserFriendlyError(
+          err,
+          "We couldn't create the agent right now. Please review the configuration and try again."
+        )
       );
     } finally {
       setIsCreating(false);
@@ -300,12 +377,16 @@ export default function AgentFlowPage() {
         provider: editProvider,
         model: editModel,
         enabledTools: editTools,
+        documentIds: editDocumentIds,
       });
       setIsEditing(false);
       await refreshAgents(updated.id);
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Failed to update agent."
+        getUserFriendlyError(
+          err,
+          "We couldn't save your changes to this agent. Please try again."
+        )
       );
     } finally {
       setIsSavingEdit(false);
@@ -324,7 +405,10 @@ export default function AgentFlowPage() {
       }
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Failed to delete agent."
+        getUserFriendlyError(
+          err,
+          "We couldn't delete this agent right now. Please try again in a moment."
+        )
       );
     } finally {
       setIsDeleting(false);
@@ -342,7 +426,10 @@ export default function AgentFlowPage() {
       await refreshExecutions(selectedAgentId, result.id);
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Failed to run agent."
+        getUserFriendlyError(
+          err,
+          "The agent couldn't process your request right now. Please try sending your message again."
+        )
       );
     } finally {
       setIsRunning(false);
@@ -379,16 +466,7 @@ export default function AgentFlowPage() {
         <div className="flex flex-col items-start gap-1.5">
           <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
             <div className="flex items-center gap-3">
-              <div
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border font-display text-sm font-bold tracking-tighter shadow-sm transition-all duration-300"
-                style={{
-                  backgroundColor: "var(--accent-bg)",
-                  color: "var(--accent-text)",
-                  borderColor: "var(--border-default)",
-                }}
-              >
-                <BrainCircuit className="h-5 w-5" aria-hidden="true" />
-              </div>
+              <BrandMark />
               <h1
                 className="font-display text-2xl font-bold tracking-tight"
                 style={{ color: "var(--text-primary)" }}
@@ -430,7 +508,7 @@ export default function AgentFlowPage() {
                 className="font-medium"
                 style={{ color: "var(--text-primary)" }}
               >
-                {currentUser.fullName}
+                {formatShortName(currentUser.fullName)}
               </div>
               <div
                 className="text-[11px]"
@@ -451,23 +529,13 @@ export default function AgentFlowPage() {
       </header>
 
       {errorMessage && (
-        <div
-          className="animate-slide-reveal mb-6 flex items-center justify-between rounded-none border px-4 py-3 text-sm"
-          style={{
-            backgroundColor: "var(--danger-bg)",
-            borderColor: "var(--danger-border)",
-            color: "var(--danger-text)",
-          }}
+        <AlertBanner
+          variant="error"
+          className="mb-6 px-4 py-3 text-sm"
+          onDismiss={() => setErrorMessage(null)}
         >
-          <span>{errorMessage}</span>
-          <button
-            type="button"
-            onClick={() => setErrorMessage(null)}
-            className="ml-4 text-xs font-semibold uppercase tracking-wider opacity-75 transition-opacity hover:opacity-100"
-          >
-            Dismiss
-          </button>
-        </div>
+          {errorMessage}
+        </AlertBanner>
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
@@ -476,7 +544,7 @@ export default function AgentFlowPage() {
           className="animate-fade-in-up space-y-6 lg:col-span-4"
           style={{ animationDelay: "60ms" }}
         >
-          <div className="af-card rounded-none p-5">
+          <Card className="p-5">
             <div className="mb-3.5 flex items-center justify-between">
               <h2
                 className="font-display text-xs font-semibold uppercase tracking-widest"
@@ -504,7 +572,7 @@ export default function AgentFlowPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedAgentId(agent.id)}
-                        className={`w-full rounded-none px-3.5 py-3 text-left ${
+                        className={`w-full rounded-[3px] px-3.5 py-3 text-left ${
                           active ? "af-item-card-active" : "af-item-card"
                         }`}
                       >
@@ -531,11 +599,11 @@ export default function AgentFlowPage() {
                 })}
               </ul>
             )}
-          </div>
+          </Card>
 
           <form
             onSubmit={handleCreateAgent}
-            className="af-card space-y-3.5 rounded-none p-5"
+            className="af-card space-y-3.5 rounded-[3px] p-5"
           >
             <div className="flex items-center justify-between">
               <h2
@@ -553,51 +621,36 @@ export default function AgentFlowPage() {
             </div>
 
             <div>
-              <label
-                className="mb-1.5 block text-xs font-medium"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Name
-              </label>
-              <input
+              <FieldLabel className="mb-1.5">Name</FieldLabel>
+              <Input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Support Assistant"
-                className="af-input w-full rounded-none px-3.5 py-2 text-sm"
+                className="px-3.5 py-2"
               />
             </div>
 
             <div>
-              <label
-                className="mb-1.5 block text-xs font-medium"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Description
-              </label>
-              <input
+              <FieldLabel className="mb-1.5">Description</FieldLabel>
+              <Input
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Handles operational troubleshooting and calculations"
-                className="af-input w-full rounded-none px-3.5 py-2 text-sm"
+                className="px-3.5 py-2"
               />
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label
-                  className="mb-1.5 block text-xs font-medium"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  Provider
-                </label>
-                <select
+                <FieldLabel className="mb-1.5">Provider</FieldLabel>
+                <Select
                   value={provider}
                   onChange={(e) => handleCreateProviderChange(e.target.value)}
                   disabled={availableProviders.length === 0}
-                  className="af-input w-full rounded-none px-3.5 py-2 text-sm disabled:opacity-50"
+                  className="px-3.5 py-2"
                 >
                   {availableProviders.length === 0 ? (
                     <option value="">No providers in .env</option>
@@ -608,21 +661,16 @@ export default function AgentFlowPage() {
                       </option>
                     ))
                   )}
-                </select>
+                </Select>
               </div>
 
               <div>
-                <label
-                  className="mb-1.5 block text-xs font-medium"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  Model
-                </label>
-                <select
+                <FieldLabel className="mb-1.5">Model</FieldLabel>
+                <Select
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
                   disabled={createModelsForProvider.length === 0}
-                  className="af-input w-full rounded-none px-3.5 py-2 text-sm disabled:opacity-50"
+                  className="px-3.5 py-2"
                 >
                   {createModelsForProvider.length === 0 ? (
                     <option value="">No models configured</option>
@@ -633,82 +681,49 @@ export default function AgentFlowPage() {
                       </option>
                     ))
                   )}
-                </select>
+                </Select>
               </div>
             </div>
 
             <div>
-              <label
-                className="mb-1.5 block text-xs font-medium"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                System Prompt
-              </label>
-              <textarea
+              <FieldLabel className="mb-1.5">System Prompt</FieldLabel>
+              <Textarea
                 rows={3}
                 required
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
-                className="af-input w-full rounded-none px-3.5 py-2 text-sm"
+                className="px-3.5 py-2"
               />
             </div>
 
-            <div>
-              <span
-                className="mb-1.5 flex items-center gap-1.5 text-xs font-medium"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Tools
-                <span
-                  title="Click tags to enable or disable tools for this agent"
-                  className="inline-flex cursor-help items-center opacity-75 hover:opacity-100"
-                >
-                  <Info className="h-3.5 w-3.5" aria-hidden="true" />
-                </span>
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {AVAILABLE_TOOLS.map((tool) => {
-                  const checked = enabledTools.includes(tool.id);
-                  return (
-                    <button
-                      key={tool.id}
-                      type="button"
-                      onClick={() => toggleCreateTool(tool.id)}
-                      className="flex items-center gap-1.5 rounded-none border px-3 py-1.5 text-xs font-medium transition-all duration-200"
-                      style={
-                        checked
-                          ? {
-                              backgroundColor: "var(--badge-active-bg)",
-                              borderColor: "var(--badge-active-border)",
-                              color: "var(--badge-active-text)",
-                            }
-                          : {
-                              backgroundColor: "var(--bg-tertiary)",
-                              borderColor: "var(--border-default)",
-                              color: "var(--text-secondary)",
-                            }
-                      }
-                    >
-                      {checked ? (
-                        <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                      ) : (
-                        <X className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
-                      )}
-                      {tool.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <ToolSelector
+              label="Tools"
+              tools={AVAILABLE_TOOLS}
+              selectedTools={enabledTools}
+              onToggle={toggleCreateTool}
+            />
 
-            <button
+            <DocumentSelector
+              label="Account Documents"
+              documents={documents}
+              selectedDocumentIds={createDocumentIds}
+              onToggle={toggleCreateDocument}
+              keyPrefix="create-doc-"
+            />
+
+            <Button
               type="submit"
               disabled={isCreating || models.length === 0}
-              className="af-btn-primary w-full rounded-none px-4 py-2.5 text-sm font-semibold tracking-tight disabled:opacity-50"
+              className="w-full px-4 py-2.5 text-sm font-semibold tracking-tight"
             >
               {isCreating ? "Creating..." : "Create Agent"}
-            </button>
+            </Button>
           </form>
+
+          <DocumentsPanel
+            documents={documents}
+            onDocumentUploaded={handleDocumentUploaded}
+          />
         </section>
 
         {/* Right Column: Selected Agent + Edit/Delete + Conversation + Trace */}
@@ -716,7 +731,7 @@ export default function AgentFlowPage() {
           className="animate-fade-in-up space-y-6 lg:col-span-8"
           style={{ animationDelay: "120ms" }}
         >
-          <div className="af-card rounded-none p-5">
+          <Card className="p-5">
             {!selectedAgent ? (
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
                 Select or create an agent to start a conversation.
@@ -744,6 +759,16 @@ export default function AgentFlowPage() {
                         style={{ color: "var(--text-primary)" }}
                       >
                         {selectedAgent.provider} / {selectedAgent.model}
+                      </span>
+                      {" · "}
+                      <span
+                        className="font-mono-tech"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        {(selectedAgent.documentIds ?? []).length}{" "}
+                        {(selectedAgent.documentIds ?? []).length === 1
+                          ? "doc"
+                          : "docs"}
                       </span>
                     </p>
                   </div>
@@ -778,38 +803,33 @@ export default function AgentFlowPage() {
                       )}
                     </div>
 
-                    <button
-                      type="button"
+                    <Button
+                      variant="secondary"
                       onClick={() =>
                         isEditing
                           ? setIsEditing(false)
                           : openEditForm(selectedAgent)
                       }
-                      className="af-btn-secondary rounded-none px-3 py-1.5 text-xs font-medium"
+                      className="px-3 py-1.5 text-xs font-medium"
                     >
                       {isEditing ? "Cancel Edit" : "Edit Agent"}
-                    </button>
+                    </Button>
 
-                    <button
-                      type="button"
+                    <Button
+                      variant="danger"
                       disabled={isDeleting}
                       onClick={() => void handleDeleteAgent(selectedAgent)}
-                      className="rounded-none border px-3 py-1.5 text-xs font-medium transition-all duration-200 hover:opacity-90 disabled:opacity-50"
-                      style={{
-                        backgroundColor: "var(--danger-bg)",
-                        borderColor: "var(--danger-border)",
-                        color: "var(--danger-text)",
-                      }}
+                      className="px-3 py-1.5 text-xs font-medium"
                     >
                       {isDeleting ? "Deleting..." : "Delete Agent"}
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
                 {isEditing && (
                   <form
                     onSubmit={handleSaveEdit}
-                    className="af-surface-inset animate-slide-reveal mb-5 space-y-3.5 rounded-none p-4"
+                    className="af-surface-inset animate-slide-reveal mb-5 space-y-3.5 rounded-[3px] p-4"
                   >
                     <h3
                       className="font-display text-xs font-semibold uppercase tracking-widest"
@@ -820,34 +840,24 @@ export default function AgentFlowPage() {
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                       <div>
-                        <label
-                          className="mb-1 block text-xs font-medium"
-                          style={{ color: "var(--text-secondary)" }}
-                        >
-                          Name
-                        </label>
-                        <input
+                        <FieldLabel>Name</FieldLabel>
+                        <Input
                           type="text"
                           required
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
-                          className="af-input w-full rounded-none px-3 py-1.5 text-sm"
+                          className="px-3 py-1.5"
                         />
                       </div>
 
                       <div>
-                        <label
-                          className="mb-1 block text-xs font-medium"
-                          style={{ color: "var(--text-secondary)" }}
-                        >
-                          Provider
-                        </label>
-                        <select
+                        <FieldLabel>Provider</FieldLabel>
+                        <Select
                           value={editProvider}
                           onChange={(e) =>
                             handleEditProviderChange(e.target.value)
                           }
-                          className="af-input w-full rounded-none px-3 py-1.5 text-sm"
+                          className="px-3 py-1.5"
                         >
                           {!availableProviders.some(
                             (p) => p.id === editProvider
@@ -861,20 +871,15 @@ export default function AgentFlowPage() {
                               {prov.label}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       </div>
 
                       <div>
-                        <label
-                          className="mb-1 block text-xs font-medium"
-                          style={{ color: "var(--text-secondary)" }}
-                        >
-                          Model
-                        </label>
-                        <select
+                        <FieldLabel>Model</FieldLabel>
+                        <Select
                           value={editModel}
                           onChange={(e) => setEditModel(e.target.value)}
-                          className="af-input w-full rounded-none px-3 py-1.5 text-sm"
+                          className="px-3 py-1.5"
                         >
                           {!editModelsForProvider.some(
                             (m) => m.id === editModel
@@ -891,124 +896,86 @@ export default function AgentFlowPage() {
                               {opt.label}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       </div>
                     </div>
 
                     <div>
-                      <label
-                        className="mb-1 block text-xs font-medium"
-                        style={{ color: "var(--text-secondary)" }}
-                      >
-                        Description
-                      </label>
-                      <input
+                      <FieldLabel>Description</FieldLabel>
+                      <Input
                         type="text"
                         value={editDescription}
                         onChange={(e) => setEditDescription(e.target.value)}
-                        className="af-input w-full rounded-none px-3 py-1.5 text-sm"
+                        className="px-3 py-1.5"
                       />
                     </div>
 
                     <div>
-                      <label
-                        className="mb-1 block text-xs font-medium"
-                        style={{ color: "var(--text-secondary)" }}
-                      >
-                        System Prompt
-                      </label>
-                      <textarea
+                      <FieldLabel>System Prompt</FieldLabel>
+                      <Textarea
                         rows={3}
                         required
                         value={editSystemPrompt}
                         onChange={(e) => setEditSystemPrompt(e.target.value)}
-                        className="af-input w-full rounded-none px-3 py-1.5 text-sm"
+                        className="px-3 py-1.5"
                       />
                     </div>
 
-                    <div>
-                      <span
-                        className="mb-1 flex items-center gap-1.5 text-xs font-medium"
-                        style={{ color: "var(--text-secondary)" }}
-                      >
-                        Active Tools
-                        <span
-                          title="Click tags to enable or disable tools for this agent"
-                          className="inline-flex cursor-help items-center opacity-75 hover:opacity-100"
-                        >
-                          <Info className="h-3.5 w-3.5" aria-hidden="true" />
-                        </span>
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        {AVAILABLE_TOOLS.map((tool) => {
-                          const checked = editTools.includes(tool.id);
-                          return (
-                            <button
-                              key={`edit-tool-${tool.id}`}
-                              type="button"
-                              onClick={() => toggleEditTool(tool.id)}
-                              className="flex items-center gap-1.5 rounded-none border px-3 py-1 text-xs font-medium transition-all duration-200"
-                              style={
-                                checked
-                                  ? {
-                                      backgroundColor: "var(--badge-active-bg)",
-                                      borderColor: "var(--badge-active-border)",
-                                      color: "var(--badge-active-text)",
-                                    }
-                                  : {
-                                      backgroundColor: "var(--bg-secondary)",
-                                      borderColor: "var(--border-default)",
-                                      color: "var(--text-secondary)",
-                                    }
-                              }
-                            >
-                              {checked ? (
-                                <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                              ) : (
-                                <X className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
-                              )}
-                              {tool.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <ToolSelector
+                      label="Active Tools"
+                      tools={AVAILABLE_TOOLS}
+                      selectedTools={editTools}
+                      onToggle={toggleEditTool}
+                      keyPrefix="edit-tool-"
+                      inactiveSurface="secondary"
+                      compact
+                    />
+
+                    <DocumentSelector
+                      label="Linked Documents"
+                      documents={documents}
+                      selectedDocumentIds={editDocumentIds}
+                      onToggle={toggleEditDocument}
+                      keyPrefix="edit-doc-"
+                      inactiveSurface="secondary"
+                      compact
+                    />
 
                     <div className="flex justify-end gap-2 pt-1">
-                      <button
+                      <Button
                         type="submit"
                         disabled={isSavingEdit}
-                        className="af-btn-primary rounded-none px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
+                        className="px-4 py-1.5 text-xs font-semibold"
                       >
                         {isSavingEdit ? "Saving..." : "Save Changes"}
-                      </button>
+                      </Button>
                     </div>
                   </form>
                 )}
 
                 <form onSubmit={handleRunPrompt} className="flex gap-2.5">
-                  <input
+                  <Input
                     type="text"
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     placeholder="Ask something that uses tools or runbooks, e.g. Calculate (120 * 0.15) + 45"
-                    className="af-input flex-1 rounded-none px-4 py-2.5 text-sm"
+                    className="flex-1 px-4 py-2.5"
                   />
-                  <button
+                  <Button
                     type="submit"
                     disabled={isRunning || !prompt.trim()}
-                    className="af-btn-primary rounded-none px-5 py-2.5 text-sm font-semibold tracking-tight disabled:opacity-50"
+                    className="px-5 py-2.5 text-sm font-semibold tracking-tight"
                   >
                     {isRunning ? "Running..." : "Send"}
-                  </button>
+                  </Button>
                 </form>
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Execution History & Trace Inspector */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-            <div className="af-card rounded-none p-5 md:col-span-5">
+            <Card className="p-5 md:col-span-5">
               <div className="mb-3.5 flex items-center justify-between">
                 <h3
                   className="font-display text-xs font-semibold uppercase tracking-widest"
@@ -1036,7 +1003,7 @@ export default function AgentFlowPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedExecutionId(exec.id)}
-                          className={`w-full rounded-none p-3 text-left text-xs ${
+                          className={`w-full rounded-[3px] p-3 text-left text-xs ${
                             active ? "af-item-card-active" : "af-item-card"
                           }`}
                         >
@@ -1075,9 +1042,9 @@ export default function AgentFlowPage() {
                   })}
                 </ul>
               )}
-            </div>
+            </Card>
 
-            <div className="af-card rounded-none p-5 md:col-span-7">
+            <Card className="p-5 md:col-span-7">
               <div className="mb-3.5 flex items-center justify-between">
                 <h3
                   className="font-display text-xs font-semibold uppercase tracking-widest"
@@ -1104,7 +1071,7 @@ export default function AgentFlowPage() {
                   className="animate-fade-in space-y-4"
                 >
                   {selectedExecution.response && (
-                    <div className="af-surface-inset rounded-none p-3.5">
+                    <SurfaceInset className="p-3.5">
                       <div
                         className="font-display mb-1.5 text-[11px] font-semibold uppercase tracking-widest"
                         style={{ color: "var(--text-secondary)" }}
@@ -1117,7 +1084,7 @@ export default function AgentFlowPage() {
                       >
                         {selectedExecution.response}
                       </p>
-                    </div>
+                    </SurfaceInset>
                   )}
 
                   <ol className="space-y-2.5">
@@ -1125,7 +1092,7 @@ export default function AgentFlowPage() {
                       <li
                         key={`${selectedExecution.id}-${step.step}`}
                         style={{ animationDelay: `${idx * 45}ms` }}
-                        className="af-surface-inset animate-fade-in-up rounded-none p-3 text-xs"
+                        className="af-surface-inset animate-fade-in-up rounded-[3px] p-3 text-xs"
                       >
                         <div className="flex items-center justify-between">
                           <span
@@ -1149,7 +1116,7 @@ export default function AgentFlowPage() {
                         </p>
                         {step.payload && (
                           <pre
-                            className="font-mono-tech mt-2 overflow-x-auto rounded-none border p-2.5 text-[11px]"
+                            className="font-mono-tech mt-2 overflow-x-auto rounded-[3px] border p-2.5 text-[11px]"
                             style={{
                               backgroundColor: "var(--bg-secondary)",
                               borderColor: "var(--border-subtle)",
@@ -1164,7 +1131,7 @@ export default function AgentFlowPage() {
                   </ol>
                 </div>
               )}
-            </div>
+            </Card>
           </div>
         </section>
       </div>

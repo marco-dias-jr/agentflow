@@ -1,10 +1,16 @@
 "use client";
 
-import { ArrowLeft, BrainCircuit } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { AlertBanner } from "@/components/ui/AlertBanner";
+import { BrandMark } from "@/components/ui/BrandMark";
+import { Button } from "@/components/ui/Button";
+import { Card, SurfaceInset } from "@/components/ui/Card";
+import { FieldLabel, Input } from "@/components/ui/Input";
 import {
   confirmPasswordReset,
+  getUserFriendlyError,
   loginAccount,
   registerAccount,
   requestPasswordResetCode,
@@ -64,7 +70,12 @@ export function AuthGate({
       const user = await loginAccount({ email, password });
       onAuthenticated(user);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to sign in.");
+      setError(
+        getUserFriendlyError(
+          err,
+          "We couldn't sign you in right now. Please check your credentials and try again."
+        )
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -80,7 +91,10 @@ export function AuthGate({
       onAuthenticated(user);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Unable to create account."
+        getUserFriendlyError(
+          err,
+          "We couldn't create your account right now. Please verify your details and try again."
+        )
       );
     } finally {
       setIsSubmitting(false);
@@ -97,7 +111,12 @@ export function AuthGate({
       setInfo(message);
       setMode("reset");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to send code.");
+      setError(
+        getUserFriendlyError(
+          err,
+          "We couldn't send the verification code right now. Please try again in a moment."
+        )
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -117,7 +136,10 @@ export function AuthGate({
       setMode("login");
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Unable to reset password."
+        getUserFriendlyError(
+          err,
+          "We couldn't reset your password. Please verify your 6-digit code and try again."
+        )
       );
     } finally {
       setIsSubmitting(false);
@@ -126,19 +148,10 @@ export function AuthGate({
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12">
-      <div className="af-card animate-fade-in-up rounded-none p-6">
+      <Card className="animate-fade-in-up p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-md border font-display text-sm font-bold tracking-tighter shadow-sm transition-all duration-300"
-              style={{
-                backgroundColor: "var(--accent-bg)",
-                color: "var(--accent-text)",
-                borderColor: "var(--border-default)",
-              }}
-            >
-              <BrainCircuit className="h-5 w-5" aria-hidden="true" />
-            </div>
+            <BrandMark />
             <div>
               <h1
                 className="font-display text-xl font-bold tracking-tight"
@@ -159,17 +172,17 @@ export function AuthGate({
         </div>
 
         {!isRecoveryMode ? (
-          <div className="af-surface-inset mt-5 grid grid-cols-2 gap-1 rounded-none p-1 text-xs">
+          <SurfaceInset className="mt-5 grid grid-cols-2 gap-1 p-1 text-xs">
             <button
               type="button"
               onClick={() => switchMode("login")}
-              className="rounded-none py-1.5 font-medium transition-all duration-300"
+              className="rounded-[3px] py-1.5 font-medium transition-all duration-300"
               style={
                 mode === "login"
                   ? {
-                      backgroundColor: "var(--accent-bg)",
-                      color: "var(--accent-text)",
-                    }
+                    backgroundColor: "var(--accent-bg)",
+                    color: "var(--accent-text)",
+                  }
                   : { color: "var(--text-secondary)" }
               }
             >
@@ -178,19 +191,19 @@ export function AuthGate({
             <button
               type="button"
               onClick={() => switchMode("register")}
-              className="rounded-none py-1.5 font-medium transition-all duration-300"
+              className="rounded-[3px] py-1.5 font-medium transition-all duration-300"
               style={
                 mode === "register"
                   ? {
-                      backgroundColor: "var(--accent-bg)",
-                      color: "var(--accent-text)",
-                    }
+                    backgroundColor: "var(--accent-bg)",
+                    color: "var(--accent-text)",
+                  }
                   : { color: "var(--text-secondary)" }
               }
             >
               Create Account
             </button>
-          </div>
+          </SurfaceInset>
         ) : (
           <div className="animate-fade-in mt-5 flex items-center justify-between border-b pb-3" style={{ borderColor: "var(--border-subtle)" }}>
             <button
@@ -212,29 +225,15 @@ export function AuthGate({
         )}
 
         {error && (
-          <div
-            className="animate-slide-reveal mt-4 rounded-none border px-3 py-2 text-xs"
-            style={{
-              backgroundColor: "var(--danger-bg)",
-              borderColor: "var(--danger-border)",
-              color: "var(--danger-text)",
-            }}
-          >
+          <AlertBanner variant="error" className="mt-4 px-3 py-2 text-xs">
             {error}
-          </div>
+          </AlertBanner>
         )}
 
         {info && (
-          <div
-            className="animate-slide-reveal mt-4 rounded-none border px-3 py-2 text-xs"
-            style={{
-              backgroundColor: "var(--selection-bg)",
-              borderColor: "var(--border-strong)",
-              color: "var(--text-primary)",
-            }}
-          >
+          <AlertBanner variant="info" className="mt-4 px-3 py-2 text-xs">
             {info}
-          </div>
+          </AlertBanner>
         )}
 
         {mode === "login" && (
@@ -244,43 +243,33 @@ export function AuthGate({
             className="animate-slide-reveal mt-4 space-y-3"
           >
             <div>
-              <label
-                className="mb-1 block text-xs"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Email
-              </label>
-              <input
+              <FieldLabel>Email</FieldLabel>
+              <Input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="af-input w-full rounded-none px-3 py-2 text-sm"
+                className="px-3 py-2"
               />
             </div>
             <div>
-              <label
-                className="mb-1 block text-xs"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Password
-              </label>
-              <input
+              <FieldLabel>Password</FieldLabel>
+              <Input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="af-input w-full rounded-none px-3 py-2 text-sm"
+                className="px-3 py-2"
               />
             </div>
-            <button
+            <Button
               type="submit"
               disabled={isSubmitting}
-              className="af-btn-primary w-full rounded-none py-2.5 text-sm font-semibold disabled:opacity-50"
+              className="w-full py-2.5 text-sm font-semibold"
             >
               {isSubmitting ? "Signing in..." : "Sign In"}
-            </button>
+            </Button>
             <div className="pt-1 text-center">
               <button
                 type="button"
@@ -301,76 +290,55 @@ export function AuthGate({
             className="animate-slide-reveal mt-4 space-y-3"
           >
             <div>
-              <label
-                className="mb-1 block text-xs"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Full Name
-              </label>
-              <input
+              <FieldLabel>Full Name</FieldLabel>
+              <Input
                 type="text"
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Marco Antonio Dias Junior"
-                className="af-input w-full rounded-none px-3 py-2 text-sm"
+                className="px-3 py-2"
               />
             </div>
             <div>
-              <label
-                className="mb-1 block text-xs"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Email
-              </label>
-              <input
+              <FieldLabel>Email</FieldLabel>
+              <Input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="af-input w-full rounded-none px-3 py-2 text-sm"
+                className="px-3 py-2"
               />
             </div>
             <div>
-              <label
-                className="mb-1 block text-xs"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                CPF
-              </label>
-              <input
+              <FieldLabel>CPF</FieldLabel>
+              <Input
                 type="text"
                 required
                 inputMode="numeric"
                 value={cpf}
                 onChange={(e) => setCpf(formatCpfMask(e.target.value))}
                 placeholder="000.000.000-00"
-                className="af-input font-mono-tech w-full rounded-none px-3 py-2 text-sm"
+                className="font-mono-tech px-3 py-2"
               />
             </div>
             <div>
-              <label
-                className="mb-1 block text-xs"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Password (min 8 chars, letters + numbers)
-              </label>
-              <input
+              <FieldLabel>Password (min 8 chars, letters + numbers)</FieldLabel>
+              <Input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="af-input w-full rounded-none px-3 py-2 text-sm"
+                className="px-3 py-2"
               />
             </div>
-            <button
+            <Button
               type="submit"
               disabled={isSubmitting}
-              className="af-btn-primary w-full rounded-none py-2.5 text-sm font-semibold disabled:opacity-50"
+              className="w-full py-2.5 text-sm font-semibold"
             >
               {isSubmitting ? "Creating account..." : "Create Account"}
-            </button>
+            </Button>
           </form>
         )}
 
@@ -395,28 +363,23 @@ export function AuthGate({
               </p>
             </div>
             <div>
-              <label
-                className="mb-1 block text-xs"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Email
-              </label>
-              <input
+              <FieldLabel>Email</FieldLabel>
+              <Input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="af-input w-full rounded-none px-3 py-2 text-sm"
+                className="px-3 py-2"
               />
             </div>
-            <button
+            <Button
               type="submit"
               disabled={isSubmitting}
-              className="af-btn-primary w-full rounded-none py-2.5 text-sm font-semibold disabled:opacity-50"
+              className="w-full py-2.5 text-sm font-semibold"
             >
               {isSubmitting ? "Sending code..." : "Send Verification Code"}
-            </button>
+            </Button>
           </form>
         )}
 
@@ -441,28 +404,18 @@ export function AuthGate({
               </p>
             </div>
             <div>
-              <label
-                className="mb-1 block text-xs"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                Email
-              </label>
-              <input
+              <FieldLabel>Email</FieldLabel>
+              <Input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="af-input w-full rounded-none px-3 py-2 text-sm"
+                className="px-3 py-2"
               />
             </div>
             <div>
-              <label
-                className="mb-1 block text-xs"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                6-Digit Code
-              </label>
-              <input
+              <FieldLabel>6-Digit Code</FieldLabel>
+              <Input
                 type="text"
                 required
                 inputMode="numeric"
@@ -472,34 +425,29 @@ export function AuthGate({
                   setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
                 }
                 placeholder="123456"
-                className="af-input font-mono-tech w-full rounded-none px-3 py-2 text-sm tracking-widest"
+                className="font-mono-tech px-3 py-2 tracking-widest"
               />
             </div>
             <div>
-              <label
-                className="mb-1 block text-xs"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                New Password
-              </label>
-              <input
+              <FieldLabel>New Password</FieldLabel>
+              <Input
                 type="password"
                 required
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="af-input w-full rounded-none px-3 py-2 text-sm"
+                className="px-3 py-2"
               />
             </div>
-            <button
+            <Button
               type="submit"
               disabled={isSubmitting}
-              className="af-btn-primary w-full rounded-none py-2.5 text-sm font-semibold disabled:opacity-50"
+              className="w-full py-2.5 text-sm font-semibold"
             >
               {isSubmitting ? "Updating password..." : "Reset Password"}
-            </button>
+            </Button>
           </form>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

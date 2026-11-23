@@ -1,5 +1,6 @@
 import { ToolDefinition } from "../../application/ports/LLMProvider";
 import {
+  ToolExecutionContext,
   ToolExecutionResult,
   ToolExecutor,
 } from "../../application/ports/ToolExecutor";
@@ -38,7 +39,8 @@ export class ToolRegistryExecutor implements ToolExecutor {
   public async execute(
     toolName: string,
     args: Record<string, unknown>,
-    allowedTools?: string[]
+    allowedTools?: string[],
+    context?: ToolExecutionContext
   ): Promise<ToolExecutionResult> {
     const normalized = toolName.trim().toLowerCase();
 
@@ -68,7 +70,7 @@ export class ToolRegistryExecutor implements ToolExecutor {
     }
 
     try {
-      const output = await tool.execute(args);
+      const output = await tool.execute(args, context);
       return {
         toolName: tool.definition.name,
         isError: false,

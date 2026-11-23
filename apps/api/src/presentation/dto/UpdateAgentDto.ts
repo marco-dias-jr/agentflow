@@ -18,6 +18,7 @@ export const updateAgentSchema = z
       .optional(),
     model: z.string().trim().min(1, "model cannot be empty").max(120).optional(),
     enabledTools: z.array(z.string().trim().min(1)).optional(),
+    documentIds: z.array(z.string().trim().min(1)).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided for update",

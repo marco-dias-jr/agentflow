@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
-import { NextFunction, Request, Response } from "express";
+import express, { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
 import { loadRootEnv } from "./infrastructure/config/loadEnv";
 
@@ -8,6 +8,7 @@ async function bootstrap(): Promise<void> {
   loadRootEnv();
 
   const app = await NestFactory.create(AppModule);
+  app.use(express.json({ limit: "10mb" }));
 
   // Security hardening headers
   app.use((_req: Request, res: Response, next: NextFunction) => {

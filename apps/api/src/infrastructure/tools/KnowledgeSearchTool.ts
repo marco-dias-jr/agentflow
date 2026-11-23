@@ -1,4 +1,7 @@
+import { EmbeddingProvider } from "../../application/ports/EmbeddingProvider";
 import { ToolDefinition } from "../../application/ports/LLMProvider";
+import { ToolExecutionContext } from "../../application/ports/ToolExecutor";
+import { DocumentRepository } from "../../domain/repositories/DocumentRepository";
 import { AgentTool } from "./AgentTool";
 
 export interface KnowledgeDocument {
@@ -6,6 +9,26 @@ export interface KnowledgeDocument {
   title: string;
   content: string;
   tags: string[];
+}
+
+export interface KnowledgeSearchMatch {
+  id: string;
+  documentId?: string;
+  title: string;
+  chunkIndex?: number;
+  content: string;
+  score: number;
+}
+
+export interface KnowledgeSearchOutput {
+  query: string;
+  matches: KnowledgeSearchMatch[];
+  message?: string;
+}
+
+export interface KnowledgeSearchDependencies {
+  documentRepository: DocumentRepository;
+  embeddingProvider: EmbeddingProvider;
 }
 
 const DEFAULT_KNOWLEDGE_BASE: KnowledgeDocument[] = [
@@ -43,7 +66,7 @@ export class KnowledgeSearchTool implements AgentTool {
   public readonly definition: ToolDefinition = {
     name: "knowledge_search",
     description:
-      "Searches the internal operational knowledge base for runbooks, policies, and troubleshooting guides.",
+      "Searches the documents linked to this agent for relevant passages, policies, and operational knowledge.",
     parameters: {
       type: "object",
       properties: {
@@ -53,26 +76,35 @@ export class KnowledgeSearchTool implements AgentTool {
         },
         limit: {
           type: "number",
-          description: "Maximum number of matching documents to return (1 to 5)",
+          description: "Maximum number of matching passages to return (1 to 5)",
         },
       },
       required: ["query"],
     },
   };
 
-  constructor(
-    private readonly documents: KnowledgeDocument[] = DEFAULT_KNOWLEDGE_BASE
-  ) {}
+  private readonly documentRepository?: DocumentRepository;
+  private readonly embeddingProvider?: EmbeddingProvider;
+  private readonly fallbackDocuments: KnowledgeDocument[];
 
-  public async execute(args: Record<string, unknown>): Promise<{
-    query: string;
-    matches: Array<{
-      id: string;
-      title: string;
-      content: string;
-      score: number;
-    }>;
-  }> {
+  constructor(
+    depsOrDocuments?: KnowledgeSearchDependencies | KnowledgeDocument[]
+  ) {
+    if (Array.isArray(depsOrDocuments)) {
+      this.fallbackDocuments = depsOrDocuments;
+    } else if (depsOrDocuments) {
+      this.documentRepository = depsOrDocuments.documentRepository;
+      this.embeddingProvider = depsOrDocuments.embeddingProvider;
+      this.fallbackDocuments = DEFAULT_KNOWLEDGE_BASE;
+    } else {
+      this.fallbackDocuments = DEFAULT_KNOWLEDGE_BASE;
+    }
+  }
+
+  public async execute(
+    args: Record<string, unknown>,
+    context?: ToolExecutionContext
+  ): Promise<KnowledgeSearchOutput> {
     const rawQuery = args.query;
     if (typeof rawQuery !== "string" || !rawQuery.trim()) {
       throw new Error("Invalid argument: 'query' must be a non-empty string.");
@@ -82,14 +114,144 @@ export class KnowledgeSearchTool implements AgentTool {
     const rawLimit = typeof args.limit === "number" ? args.limit : 3;
     const limit = Math.max(1, Math.min(5, Math.floor(rawLimit)));
 
+    if (this.documentRepository && this.embeddingProvider) {
+      return this.executeRagSearch(query, limit, context);
+    }
+
+    return this.executeFallbackSearch(query, limit);
+  }
+
+  private async executeRagSearch(
+    query: string,
+    limit: number,
+    context?: ToolExecutionContext
+  ): Promise<KnowledgeSearchOutput> {
+    if (!context?.userId || !context?.agentId) {
+      return {
+        query,
+        matches: [],
+        message:
+          "Knowledge search requires an authenticated user and agent context.",
+      };
+    }
+
+    const linkedDocumentIds =
+      context.documentIds !== undefined
+        ? context.documentIds
+        : await this.documentRepository!.getAgentDocumentIds(context.agentId);
+
+    const uniqueDocIds = Array.from(
+      new Set(linkedDocumentIds.map((id) => id.trim()).filter(Boolean))
+    );
+
+    if (uniqueDocIds.length === 0) {
+      return {
+        query,
+        matches: [],
+        message:
+          "No documents are linked to this agent. Attach documents to this agent to enable knowledge search.",
+      };
+    }
+
+    const linkedDocs = await this.documentRepository!.findByIdsForUser(
+      context.userId,
+      uniqueDocIds
+    );
+
+    if (linkedDocs.length === 0) {
+      return {
+        query,
+        matches: [],
+        message:
+          "No accessible documents were found for this agent in your account.",
+      };
+    }
+
+    // Group documents by their indexing embedding profile so query vectors match each document's vector space
+    const groups = new Map<
+      string,
+      {
+        provider: (typeof linkedDocs)[number]["embeddingProvider"];
+        model: string;
+        docIds: string[];
+      }
+    >();
+
+    for (const doc of linkedDocs) {
+      const key = `${doc.embeddingProvider}::${doc.embeddingModel}`;
+      const existingGroup = groups.get(key);
+      if (existingGroup) {
+        existingGroup.docIds.push(doc.id);
+      } else {
+        groups.set(key, {
+          provider: doc.embeddingProvider,
+          model: doc.embeddingModel,
+          docIds: [doc.id],
+        });
+      }
+    }
+
+    const allMatches: KnowledgeSearchMatch[] = [];
+
+    for (const group of groups.values()) {
+      const embeddings = await this.embeddingProvider!.embedTexts([query], {
+        provider: group.provider,
+        model: group.model,
+      });
+      const queryEmbedding = embeddings[0] ?? [];
+
+      const groupMatches = await this.documentRepository!.searchSimilarChunks({
+        userId: context.userId,
+        documentIds: group.docIds,
+        queryEmbedding,
+        queryText: query,
+        limit,
+      });
+
+      for (const match of groupMatches) {
+        allMatches.push({
+          id: match.chunkId,
+          documentId: match.documentId,
+          title: match.documentTitle,
+          chunkIndex: match.chunkIndex,
+          content: match.content,
+          score: match.score,
+        });
+      }
+    }
+
+    const ranked = allMatches
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    if (ranked.length === 0) {
+      return {
+        query,
+        matches: [],
+        message:
+          "No relevant passages were found in the documents linked to this agent.",
+      };
+    }
+
+    return {
+      query,
+      matches: ranked,
+    };
+  }
+
+  private executeFallbackSearch(
+    query: string,
+    limit: number
+  ): KnowledgeSearchOutput {
     const terms = query
       .toLowerCase()
       .split(/\W+/)
       .filter((term) => term.length >= 2);
 
-    const scored = this.documents
+    const scored = this.fallbackDocuments
       .map((doc) => {
-        const searchableText = `${doc.title} ${doc.content} ${doc.tags.join(" ")}`.toLowerCase();
+        const searchableText =
+          `${doc.title} ${doc.content} ${doc.tags.join(" ")}`.toLowerCase();
         const score = terms.reduce(
           (acc, term) => (searchableText.includes(term) ? acc + 1 : acc),
           0

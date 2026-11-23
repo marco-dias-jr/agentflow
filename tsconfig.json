@@ -5,6 +5,8 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "typeRoots": ["./apps/api/node_modules/@types"],
+    "types": ["node"],
     "baseUrl": ".",
     "paths": {
       "vitest": ["./apps/api/node_modules/vitest"],
