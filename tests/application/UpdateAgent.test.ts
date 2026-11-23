@@ -10,16 +10,23 @@ class InMemoryAgentRepository implements AgentRepository {
     this.items.set(agent.id, agent);
   }
 
-  public async findById(id: string): Promise<Agent | null> {
-    return this.items.get(id) ?? null;
+  public async findByIdForUser(
+    id: string,
+    userId: string
+  ): Promise<Agent | null> {
+    const agent = this.items.get(id);
+    return agent && agent.userId === userId ? agent : null;
   }
 
-  public async findAll(): Promise<Agent[]> {
-    return Array.from(this.items.values());
+  public async findAllByUserId(userId: string): Promise<Agent[]> {
+    return Array.from(this.items.values()).filter((a) => a.userId === userId);
   }
 
-  public async deleteById(id: string): Promise<void> {
-    this.items.delete(id);
+  public async deleteByIdForUser(id: string, userId: string): Promise<void> {
+    const agent = this.items.get(id);
+    if (agent && agent.userId === userId) {
+      this.items.delete(id);
+    }
   }
 }
 
@@ -28,9 +35,11 @@ describe("UpdateAgent use case and Agent.update", () => {
     const repo = new InMemoryAgentRepository();
     const initial = Agent.create({
       id: "agent-1",
+      userId: "user-1",
       name: "Initial Agent",
       description: "Old description",
       systemPrompt: "Old prompt",
+      provider: "gemini",
       model: "gemini-2.5-flash",
       enabledTools: ["calculator"],
     });
@@ -39,9 +48,11 @@ describe("UpdateAgent use case and Agent.update", () => {
     const useCase = new UpdateAgent(repo);
     const updated = await useCase.execute({
       id: "agent-1",
+      userId: "user-1",
       name: "  Updated Ops Agent  ",
       description: "  New operational scope  ",
       systemPrompt: "  Always verify runbooks first.  ",
+      provider: "groq",
       model: "llama-3.3-70b-versatile",
       enabledTools: ["knowledge_search", "calculator", "knowledge_search"],
     });
@@ -49,10 +60,12 @@ describe("UpdateAgent use case and Agent.update", () => {
     expect(updated.name).toBe("Updated Ops Agent");
     expect(updated.description).toBe("New operational scope");
     expect(updated.systemPrompt).toBe("Always verify runbooks first.");
+    expect(updated.provider).toBe("groq");
     expect(updated.model).toBe("llama-3.3-70b-versatile");
     expect(updated.enabledTools).toEqual(["knowledge_search", "calculator"]);
 
-    const persisted = await repo.findById("agent-1");
+    const persisted = await repo.findByIdForUser("agent-1", "user-1");
+    expect(persisted?.provider).toBe("groq");
     expect(persisted?.model).toBe("llama-3.3-70b-versatile");
     expect(persisted?.enabledTools).toEqual(["knowledge_search", "calculator"]);
   });
@@ -64,6 +77,7 @@ describe("UpdateAgent use case and Agent.update", () => {
     await expect(
       useCase.execute({
         id: "missing-agent",
+        userId: "user-1",
         name: "Renamed",
       })
     ).rejects.toThrow("Agent not found: missing-agent");
@@ -73,9 +87,11 @@ describe("UpdateAgent use case and Agent.update", () => {
     const repo = new InMemoryAgentRepository();
     const agent = Agent.create({
       id: "agent-2",
+      userId: "user-1",
       name: "Helper",
       description: "",
       systemPrompt: "Be helpful",
+      provider: "gemini",
       model: "gemini-2.5-flash",
       enabledTools: [],
     });
@@ -86,6 +102,7 @@ describe("UpdateAgent use case and Agent.update", () => {
     await expect(
       useCase.execute({
         id: "agent-2",
+        userId: "user-1",
         systemPrompt: "   ",
       })
     ).rejects.toThrow("Agent systemPrompt is required.");

@@ -10,12 +10,13 @@ import {
   Param,
   Post,
   Req,
+  UseGuards,
 } from "@nestjs/common";
-import { Request } from "express";
 import { ExecuteAgent } from "../../application/use-cases/ExecuteAgent";
 import { GetExecutionHistory } from "../../application/use-cases/GetExecutionHistory";
 import { AgentRepository } from "../../domain/repositories/AgentRepository";
 import { executeAgentSchema } from "../dto/ExecuteAgentDto";
+import { AuthenticatedRequest, AuthGuard } from "../security/AuthGuard";
 import { AGENT_REPOSITORY_TOKEN } from "./AgentsController";
 
 export const EXECUTE_AGENT_USE_CASE_TOKEN = Symbol("EXECUTE_AGENT_USE_CASE_TOKEN");
@@ -55,6 +56,7 @@ function checkRateLimit(clientKey: string): void {
 }
 
 @Controller("agents/:agentId")
+@UseGuards(AuthGuard)
 export class ExecutionsController {
   constructor(
     @Inject(AGENT_REPOSITORY_TOKEN)
@@ -69,10 +71,11 @@ export class ExecutionsController {
   public async execute(
     @Param("agentId") agentId: string,
     @Body() body: unknown,
-    @Req() req: Request
+    @Req() req: AuthenticatedRequest
   ) {
+    const userId = req.user!.id;
     const clientIp = req.ip || req.socket.remoteAddress || "unknown";
-    checkRateLimit(clientIp);
+    checkRateLimit(`${userId}:${clientIp}`);
 
     const parsed = executeAgentSchema.safeParse(body);
     if (!parsed.success) {
@@ -82,13 +85,14 @@ export class ExecutionsController {
       });
     }
 
-    const agent = await this.agentRepository.findById(agentId);
+    const agent = await this.agentRepository.findByIdForUser(agentId, userId);
     if (!agent) {
       throw new NotFoundException(`Agent not found: ${agentId}`);
     }
 
     const execution = await this.executeAgentUseCase.execute({
       agentId,
+      userId,
       prompt: parsed.data.prompt,
       maxToolIterations: parsed.data.maxToolIterations,
     });
@@ -101,13 +105,20 @@ export class ExecutionsController {
   }
 
   @Get("executions")
-  public async history(@Param("agentId") agentId: string) {
-    const agent = await this.agentRepository.findById(agentId);
+  public async history(
+    @Param("agentId") agentId: string,
+    @Req() req: AuthenticatedRequest
+  ) {
+    const userId = req.user!.id;
+    const agent = await this.agentRepository.findByIdForUser(agentId, userId);
     if (!agent) {
       throw new NotFoundException(`Agent not found: ${agentId}`);
     }
 
-    const executions = await this.getExecutionHistoryUseCase.execute(agentId);
+    const executions = await this.getExecutionHistoryUseCase.execute(
+      agentId,
+      userId
+    );
     return { data: executions };
   }
 }

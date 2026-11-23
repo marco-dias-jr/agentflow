@@ -8,18 +8,36 @@ export interface TraceStep {
   timestamp: string;
 }
 
-export interface CreateExecutionInput {
+export interface ExecutionProps {
   id: string;
   agentId: string;
+  userId: string;
+  provider: string;
+  model: string;
+  prompt: string;
+  status: ExecutionStatus;
+  response: string | null;
+  trace: TraceStep[];
+  createdAt: Date;
+  completedAt: Date | null;
+}
+
+export interface StartExecutionInput {
+  id: string;
+  agentId: string;
+  userId: string;
   provider: string;
   model: string;
   prompt: string;
   now?: Date;
 }
 
+export type CreateExecutionInput = StartExecutionInput;
+
 export class Execution {
   public readonly id: string;
   public readonly agentId: string;
+  public readonly userId: string;
   public readonly provider: string;
   public readonly model: string;
   public readonly prompt: string;
@@ -29,20 +47,10 @@ export class Execution {
   public readonly createdAt: Date;
   public completedAt: Date | null;
 
-  private constructor(props: {
-    id: string;
-    agentId: string;
-    provider: string;
-    model: string;
-    prompt: string;
-    status: ExecutionStatus;
-    response: string | null;
-    trace: TraceStep[];
-    createdAt: Date;
-    completedAt: Date | null;
-  }) {
+  private constructor(props: ExecutionProps) {
     this.id = props.id;
     this.agentId = props.agentId;
+    this.userId = props.userId;
     this.provider = props.provider;
     this.model = props.model;
     this.prompt = props.prompt;
@@ -53,12 +61,15 @@ export class Execution {
     this.completedAt = props.completedAt;
   }
 
-  public static start(input: CreateExecutionInput): Execution {
+  public static start(input: StartExecutionInput): Execution {
     if (!input.id.trim()) {
       throw new Error("Execution id is required.");
     }
     if (!input.agentId.trim()) {
       throw new Error("Execution agentId is required.");
+    }
+    if (!input.userId || !input.userId.trim()) {
+      throw new Error("Execution userId is required.");
     }
     if (!input.prompt.trim()) {
       throw new Error("Execution prompt is required.");
@@ -76,6 +87,7 @@ export class Execution {
     return new Execution({
       id: input.id.trim(),
       agentId: input.agentId.trim(),
+      userId: input.userId.trim(),
       provider: input.provider.trim(),
       model: input.model.trim(),
       prompt: input.prompt.trim(),

@@ -18,6 +18,7 @@ export interface ToolCallRequest {
 }
 
 export interface GenerateInput {
+  provider?: string;
   model: string;
   messages: ChatMessage[];
   tools?: ToolDefinition[];

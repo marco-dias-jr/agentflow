@@ -1,23 +1,31 @@
 import "reflect-metadata";
-import { resolve } from "path";
-import { config as loadEnv } from "dotenv";
 import { NestFactory } from "@nestjs/core";
+import { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
-
-// Load root .env when running locally from apps/api or monorepo root
-loadEnv({ path: resolve(__dirname, "../../../.env") });
-loadEnv();
+import { loadRootEnv } from "./infrastructure/config/loadEnv";
 
 async function bootstrap(): Promise<void> {
+  loadRootEnv();
+
   const app = await NestFactory.create(AppModule);
 
-  const allowedOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:3000")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+  // Security hardening headers
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader(
+      "Permissions-Policy",
+      "camera=(), microphone=(), geolocation=()"
+    );
+    next();
+  });
 
+  const allowedOrigin = process.env.CORS_ORIGIN?.trim() || "http://localhost:3000";
   app.enableCors({
-    origin: allowedOrigins,
+    origin: allowedOrigin,
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
     credentials: true,
   });
 

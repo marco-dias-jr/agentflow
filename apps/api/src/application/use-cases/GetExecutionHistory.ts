@@ -4,10 +4,16 @@ import { ExecutionRepository } from "../../domain/repositories/ExecutionReposito
 export class GetExecutionHistory {
   constructor(private readonly executionRepository: ExecutionRepository) {}
 
-  public async execute(agentId: string): Promise<Execution[]> {
+  public async execute(agentId: string, userId: string): Promise<Execution[]> {
     if (!agentId.trim()) {
       throw new Error("Agent id is required.");
     }
-    return this.executionRepository.findByAgentId(agentId.trim());
+    if (!userId.trim()) {
+      throw new Error("User id is required.");
+    }
+    return this.executionRepository.findByAgentIdForUser(
+      agentId.trim(),
+      userId.trim()
+    );
   }
 }

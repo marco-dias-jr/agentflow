@@ -9,6 +9,7 @@ import { ExecutionRepository } from "../../domain/repositories/ExecutionReposito
 interface ExecutionRow {
   id: string;
   agent_id: string;
+  user_id: string;
   provider: string;
   model: string;
   prompt: string;
@@ -24,13 +25,14 @@ export class PostgresExecutionRepository implements ExecutionRepository {
 
   public async save(execution: Execution): Promise<void> {
     const query = `
-      insert into executions (id, agent_id, provider, model, prompt, status, response, trace, created_at, completed_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
+      insert into executions (id, agent_id, user_id, provider, model, prompt, status, response, trace, created_at, completed_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11)
     `;
 
     await this.pool.query(query, [
       execution.id,
       execution.agentId,
+      execution.userId,
       execution.provider,
       execution.model,
       execution.prompt,
@@ -45,15 +47,16 @@ export class PostgresExecutionRepository implements ExecutionRepository {
   public async update(execution: Execution): Promise<void> {
     const query = `
       update executions
-      set status = $2,
-          response = $3,
-          trace = $4::jsonb,
-          completed_at = $5
-      where id = $1
+      set status = $3,
+          response = $4,
+          trace = $5::jsonb,
+          completed_at = $6
+      where id = $1 and user_id = $2
     `;
 
     await this.pool.query(query, [
       execution.id,
+      execution.userId,
       execution.status,
       execution.response,
       JSON.stringify(execution.trace),
@@ -61,25 +64,31 @@ export class PostgresExecutionRepository implements ExecutionRepository {
     ]);
   }
 
-  public async findById(id: string): Promise<Execution | null> {
+  public async findByIdForUser(
+    id: string,
+    userId: string
+  ): Promise<Execution | null> {
     const result = await this.pool.query<ExecutionRow>(
-      `select id, agent_id, provider, model, prompt, status, response, trace, created_at, completed_at
+      `select id, agent_id, user_id, provider, model, prompt, status, response, trace, created_at, completed_at
        from executions
-       where id = $1`,
-      [id]
+       where id = $1 and user_id = $2`,
+      [id, userId]
     );
 
     const row = result.rows[0];
     return row ? this.mapRowToEntity(row) : null;
   }
 
-  public async findByAgentId(agentId: string): Promise<Execution[]> {
+  public async findByAgentIdForUser(
+    agentId: string,
+    userId: string
+  ): Promise<Execution[]> {
     const result = await this.pool.query<ExecutionRow>(
-      `select id, agent_id, provider, model, prompt, status, response, trace, created_at, completed_at
+      `select id, agent_id, user_id, provider, model, prompt, status, response, trace, created_at, completed_at
        from executions
-       where agent_id = $1
+       where agent_id = $1 and user_id = $2
        order by created_at desc`,
-      [agentId]
+      [agentId, userId]
     );
 
     return result.rows.map((row) => this.mapRowToEntity(row));
@@ -89,6 +98,7 @@ export class PostgresExecutionRepository implements ExecutionRepository {
     const execution = Execution.start({
       id: row.id,
       agentId: row.agent_id,
+      userId: row.user_id,
       provider: row.provider,
       model: row.model,
       prompt: row.prompt,

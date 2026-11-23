@@ -6,9 +6,11 @@ describe("Agent domain entity", () => {
   it("creates an agent with trimmed fields and deduplicated tools", () => {
     const agent = Agent.create({
       id: "agent-1",
+      userId: "user-1",
       name: "  Support Assistant  ",
       description: " Technical helper ",
       systemPrompt: " You are helpful. ",
+      provider: "  Gemini  ",
       model: "gemini-2.5-flash",
       enabledTools: ["calculator", "calculator", "knowledge_search", "  "],
     });
@@ -16,6 +18,7 @@ describe("Agent domain entity", () => {
     expect(agent.name).toBe("Support Assistant");
     expect(agent.description).toBe("Technical helper");
     expect(agent.systemPrompt).toBe("You are helpful.");
+    expect(agent.provider).toBe("gemini");
     expect(agent.enabledTools).toEqual(["calculator", "knowledge_search"]);
   });
 
@@ -23,9 +26,11 @@ describe("Agent domain entity", () => {
     expect(() =>
       Agent.create({
         id: "agent-1",
+        userId: "user-1",
         name: "Support Assistant",
         description: "",
         systemPrompt: "   ",
+        provider: "gemini",
         model: "gemini-2.5-flash",
         enabledTools: [],
       })
@@ -38,6 +43,7 @@ describe("Execution domain entity", () => {
     const execution = Execution.start({
       id: "exec-1",
       agentId: "agent-1",
+      userId: "user-1",
       provider: "gemini",
       model: "gemini-2.5-flash",
       prompt: "What is 2 + 2?",

@@ -7,6 +7,7 @@ import { ToolExecutor } from "../ports/ToolExecutor";
 
 export interface ExecuteAgentCommand {
   agentId: string;
+  userId: string;
   prompt: string;
   maxToolIterations?: number;
 }
@@ -20,7 +21,10 @@ export class ExecuteAgent {
   ) {}
 
   public async execute(command: ExecuteAgentCommand): Promise<Execution> {
-    const agent = await this.agentRepository.findById(command.agentId);
+    const agent = await this.agentRepository.findByIdForUser(
+      command.agentId,
+      command.userId
+    );
     if (!agent) {
       throw new Error(`Agent not found: ${command.agentId}`);
     }
@@ -28,7 +32,8 @@ export class ExecuteAgent {
     const execution = Execution.start({
       id: randomUUID(),
       agentId: agent.id,
-      provider: "configured",
+      userId: command.userId,
+      provider: agent.provider,
       model: agent.model,
       prompt: command.prompt,
     });
@@ -56,6 +61,7 @@ export class ExecuteAgent {
         );
 
         const output = await this.llmProvider.generate({
+          provider: agent.provider,
           model: agent.model,
           messages,
           tools: toolDefinitions,

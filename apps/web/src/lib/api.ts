@@ -2,11 +2,20 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/+$/, "") ||
   "http://localhost:3001";
 
+export interface UserProfileDTO {
+  id: string;
+  fullName: string;
+  email: string;
+  cpf: string;
+}
+
 export interface AgentDTO {
   id: string;
+  userId: string;
   name: string;
   description: string;
   systemPrompt: string;
+  provider: string;
   model: string;
   enabledTools: string[];
   createdAt: string;
@@ -30,6 +39,7 @@ export interface TraceStepDTO {
 export interface ExecutionDTO {
   id: string;
   agentId: string;
+  userId: string;
   provider: string;
   model: string;
   prompt: string;
@@ -44,6 +54,7 @@ export interface CreateAgentPayload {
   name: string;
   description: string;
   systemPrompt: string;
+  provider: string;
   model: string;
   enabledTools: string[];
 }
@@ -51,33 +62,130 @@ export interface CreateAgentPayload {
 export interface ModelOptionDTO {
   id: string;
   label: string;
-  provider: "gemini" | "groq" | "ollama";
+  provider: string;
+  providerLabel: string;
 }
 
 export interface UpdateAgentPayload {
   name?: string;
   description?: string;
   systemPrompt?: string;
+  provider?: string;
   model?: string;
   enabledTools?: string[];
 }
 
+export async function getMe(): Promise<UserProfileDTO | null> {
+  const res = await fetch(`${API_BASE_URL}/auth/me`, {
+    cache: "no-store",
+    credentials: "include",
+  });
+  if (res.status === 401) {
+    return null;
+  }
+  if (!res.ok) {
+    throw new Error(`Session check failed (${res.status})`);
+  }
+  const json = (await res.json()) as { data: UserProfileDTO };
+  return json.data;
+}
+
+export async function registerAccount(payload: {
+  fullName: string;
+  email: string;
+  cpf: string;
+  password: string;
+}): Promise<UserProfileDTO> {
+  const res = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.message || `Registration failed (${res.status})`);
+  }
+  return json.data as UserProfileDTO;
+}
+
+export async function loginAccount(payload: {
+  email: string;
+  password: string;
+}): Promise<UserProfileDTO> {
+  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.message || `Login failed (${res.status})`);
+  }
+  return json.data as UserProfileDTO;
+}
+
+export async function logoutAccount(): Promise<void> {
+  await fetch(`${API_BASE_URL}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+}
+
+export async function requestPasswordResetCode(email: string): Promise<string> {
+  const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.message || `Request failed (${res.status})`);
+  }
+  return json.data.message as string;
+}
+
+export async function confirmPasswordReset(payload: {
+  email: string;
+  code: string;
+  newPassword: string;
+}): Promise<string> {
+  const res = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.message || `Reset failed (${res.status})`);
+  }
+  return json.data.message as string;
+}
+
 export async function listModels(): Promise<{
-  activeProvider: string;
   models: ModelOptionDTO[];
 }> {
-  const res = await fetch(`${API_BASE_URL}/models`, { cache: "no-store" });
+  const res = await fetch(`${API_BASE_URL}/models`, {
+    cache: "no-store",
+    credentials: "include",
+  });
   if (!res.ok) {
     throw new Error(`Failed to load models (${res.status})`);
   }
   const json = (await res.json()) as {
-    data: { activeProvider: string; models: ModelOptionDTO[] };
+    data: { models: ModelOptionDTO[] };
   };
   return json.data;
 }
 
 export async function listAgents(): Promise<AgentDTO[]> {
-  const res = await fetch(`${API_BASE_URL}/agents`, { cache: "no-store" });
+  const res = await fetch(`${API_BASE_URL}/agents`, {
+    cache: "no-store",
+    credentials: "include",
+  });
   if (!res.ok) {
     throw new Error(`Failed to load agents (${res.status})`);
   }
@@ -89,6 +197,7 @@ export async function createAgent(payload: CreateAgentPayload): Promise<AgentDTO
   const res = await fetch(`${API_BASE_URL}/agents`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(payload),
   });
   const json = await res.json();
@@ -105,6 +214,7 @@ export async function updateAgent(
   const res = await fetch(`${API_BASE_URL}/agents/${agentId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(payload),
   });
   const json = await res.json();
@@ -117,6 +227,7 @@ export async function updateAgent(
 export async function deleteAgent(agentId: string): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/agents/${agentId}`, {
     method: "DELETE",
+    credentials: "include",
   });
   if (!res.ok) {
     let message = `Failed to delete agent (${res.status})`;
@@ -137,6 +248,7 @@ export async function executeAgentPrompt(
   const res = await fetch(`${API_BASE_URL}/agents/${agentId}/executions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ prompt }),
   });
   const json = await res.json();
@@ -149,6 +261,7 @@ export async function executeAgentPrompt(
 export async function listExecutions(agentId: string): Promise<ExecutionDTO[]> {
   const res = await fetch(`${API_BASE_URL}/agents/${agentId}/executions`, {
     cache: "no-store",
+    credentials: "include",
   });
   if (!res.ok) {
     throw new Error(`Failed to load executions (${res.status})`);

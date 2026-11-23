@@ -11,6 +11,8 @@ import {
   Param,
   Patch,
   Post,
+  Req,
+  UseGuards,
 } from "@nestjs/common";
 import { CreateAgent } from "../../application/use-cases/CreateAgent";
 import { DeleteAgent } from "../../application/use-cases/DeleteAgent";
@@ -18,6 +20,7 @@ import { UpdateAgent } from "../../application/use-cases/UpdateAgent";
 import { AgentRepository } from "../../domain/repositories/AgentRepository";
 import { createAgentSchema } from "../dto/CreateAgentDto";
 import { updateAgentSchema } from "../dto/UpdateAgentDto";
+import { AuthenticatedRequest, AuthGuard } from "../security/AuthGuard";
 
 export const AGENT_REPOSITORY_TOKEN = Symbol("AGENT_REPOSITORY_TOKEN");
 export const CREATE_AGENT_USE_CASE_TOKEN = Symbol("CREATE_AGENT_USE_CASE_TOKEN");
@@ -25,6 +28,7 @@ export const UPDATE_AGENT_USE_CASE_TOKEN = Symbol("UPDATE_AGENT_USE_CASE_TOKEN")
 export const DELETE_AGENT_USE_CASE_TOKEN = Symbol("DELETE_AGENT_USE_CASE_TOKEN");
 
 @Controller("agents")
+@UseGuards(AuthGuard)
 export class AgentsController {
   constructor(
     @Inject(CREATE_AGENT_USE_CASE_TOKEN)
@@ -38,7 +42,7 @@ export class AgentsController {
   ) {}
 
   @Post()
-  public async create(@Body() body: unknown) {
+  public async create(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
     const parsed = createAgentSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException({
@@ -47,10 +51,15 @@ export class AgentsController {
       });
     }
 
+    const userId = req.user!.id;
+
     try {
-      const agent = await this.createAgentUseCase.execute(parsed.data);
+      const agent = await this.createAgentUseCase.execute({
+        ...parsed.data,
+        userId,
+      });
       console.log(
-        `[API] Created agent ${agent.id} (${agent.name}, model=${agent.model})`
+        `[API] Created agent ${agent.id} (${agent.name}, model=${agent.model}, user=${userId})`
       );
       return { data: agent };
     } catch (error) {
@@ -61,7 +70,11 @@ export class AgentsController {
   }
 
   @Patch(":id")
-  public async update(@Param("id") id: string, @Body() body: unknown) {
+  public async update(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest
+  ) {
     const parsed = updateAgentSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException({
@@ -70,9 +83,12 @@ export class AgentsController {
       });
     }
 
+    const userId = req.user!.id;
+
     try {
       const agent = await this.updateAgentUseCase.execute({
         id,
+        userId,
         ...parsed.data,
       });
       console.log(
@@ -90,14 +106,17 @@ export class AgentsController {
   }
 
   @Get()
-  public async list() {
-    const agents = await this.agentRepository.findAll();
+  public async list(@Req() req: AuthenticatedRequest) {
+    const agents = await this.agentRepository.findAllByUserId(req.user!.id);
     return { data: agents };
   }
 
   @Get(":id")
-  public async getById(@Param("id") id: string) {
-    const agent = await this.agentRepository.findById(id);
+  public async getById(
+    @Param("id") id: string,
+    @Req() req: AuthenticatedRequest
+  ) {
+    const agent = await this.agentRepository.findByIdForUser(id, req.user!.id);
     if (!agent) {
       throw new NotFoundException(`Agent not found: ${id}`);
     }
@@ -106,9 +125,12 @@ export class AgentsController {
 
   @Delete(":id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  public async remove(@Param("id") id: string) {
+  public async remove(
+    @Param("id") id: string,
+    @Req() req: AuthenticatedRequest
+  ) {
     try {
-      await this.deleteAgentUseCase.execute(id);
+      await this.deleteAgentUseCase.execute(id, req.user!.id);
       console.log(`[API] Deleted agent ${id}`);
     } catch (error) {
       const message =

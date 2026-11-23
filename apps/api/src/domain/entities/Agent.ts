@@ -1,8 +1,23 @@
-export interface CreateAgentInput {
+export interface AgentProps {
   id: string;
+  userId: string;
   name: string;
   description: string;
   systemPrompt: string;
+  provider: string;
+  model: string;
+  enabledTools: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateAgentInput {
+  id: string;
+  userId: string;
+  name: string;
+  description: string;
+  systemPrompt: string;
+  provider: string;
   model: string;
   enabledTools: string[];
   now?: Date;
@@ -12,6 +27,7 @@ export interface UpdateAgentInput {
   name?: string;
   description?: string;
   systemPrompt?: string;
+  provider?: string;
   model?: string;
   enabledTools?: string[];
   now?: Date;
@@ -19,28 +35,23 @@ export interface UpdateAgentInput {
 
 export class Agent {
   public readonly id: string;
+  public readonly userId: string;
   public name: string;
   public description: string;
   public systemPrompt: string;
+  public provider: string;
   public model: string;
   public enabledTools: string[];
   public readonly createdAt: Date;
   public updatedAt: Date;
 
-  private constructor(props: {
-    id: string;
-    name: string;
-    description: string;
-    systemPrompt: string;
-    model: string;
-    enabledTools: string[];
-    createdAt: Date;
-    updatedAt: Date;
-  }) {
+  private constructor(props: AgentProps) {
     this.id = props.id;
+    this.userId = props.userId;
     this.name = props.name;
     this.description = props.description;
     this.systemPrompt = props.systemPrompt;
+    this.provider = props.provider;
     this.model = props.model;
     this.enabledTools = props.enabledTools;
     this.createdAt = props.createdAt;
@@ -56,16 +67,23 @@ export class Agent {
   public static create(input: CreateAgentInput): Agent {
     const name = input.name.trim();
     const systemPrompt = input.systemPrompt.trim();
+    const provider = input.provider.trim().toLowerCase();
     const model = input.model.trim();
 
     if (!input.id.trim()) {
       throw new Error("Agent id is required.");
+    }
+    if (!input.userId || !input.userId.trim()) {
+      throw new Error("Agent userId is required.");
     }
     if (!name) {
       throw new Error("Agent name is required.");
     }
     if (!systemPrompt) {
       throw new Error("Agent systemPrompt is required.");
+    }
+    if (!provider) {
+      throw new Error("Agent provider is required.");
     }
     if (!model) {
       throw new Error("Agent model is required.");
@@ -76,9 +94,11 @@ export class Agent {
 
     return new Agent({
       id: input.id.trim(),
+      userId: input.userId.trim(),
       name,
       description: input.description.trim(),
       systemPrompt,
+      provider,
       model,
       enabledTools: uniqueTools,
       createdAt: timestamp,
@@ -105,6 +125,14 @@ export class Agent {
         throw new Error("Agent systemPrompt is required.");
       }
       this.systemPrompt = normalizedPrompt;
+    }
+
+    if (input.provider !== undefined) {
+      const normalizedProvider = input.provider.trim().toLowerCase();
+      if (!normalizedProvider) {
+        throw new Error("Agent provider is required.");
+      }
+      this.provider = normalizedProvider;
     }
 
     if (input.model !== undefined) {

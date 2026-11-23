@@ -1,14 +1,16 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, UseGuards } from "@nestjs/common";
+import { AuthGuard } from "../security/AuthGuard";
 
 export interface ModelOption {
   id: string;
   label: string;
-  provider: "gemini" | "groq" | "ollama";
+  provider: string;
+  providerLabel: string;
 }
 
 function parseEnvModels(
   rawValue: string | undefined,
-  provider: "gemini" | "groq" | "ollama",
+  provider: string,
   providerLabel: string,
   out: ModelOption[],
   seen: Set<string>
@@ -25,29 +27,35 @@ function parseEnvModels(
     seen.add(key);
     out.push({
       id: modelId,
-      label: `${modelId} (${providerLabel})`,
+      label: modelId,
       provider,
+      providerLabel,
     });
   }
 }
 
 @Controller("models")
+@UseGuards(AuthGuard)
 export class ModelsController {
   @Get()
   public listAvailableModels() {
     const models: ModelOption[] = [];
     const seen = new Set<string>();
-    const activeProvider = (process.env.LLM_PROVIDER ?? "")
-      .trim()
-      .toLowerCase();
 
-    parseEnvModels(process.env.GEMINI_MODEL, "gemini", "Gemini", models, seen);
-    parseEnvModels(process.env.GROQ_MODEL, "groq", "Groq", models, seen);
-    parseEnvModels(process.env.OLLAMA_MODEL, "ollama", "Ollama", models, seen);
+    if (process.env.GEMINI_API_KEY?.trim()) {
+      parseEnvModels(process.env.GEMINI_MODEL, "gemini", "Gemini", models, seen);
+    }
+
+    if (process.env.GROQ_API_KEY?.trim()) {
+      parseEnvModels(process.env.GROQ_MODEL, "groq", "Groq", models, seen);
+    }
+
+    if (process.env.OLLAMA_MODEL?.trim() || process.env.OLLAMA_BASE_URL?.trim()) {
+      parseEnvModels(process.env.OLLAMA_MODEL, "ollama", "Ollama", models, seen);
+    }
 
     return {
       data: {
-        activeProvider,
         models,
       },
     };

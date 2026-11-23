@@ -10,16 +10,23 @@ class InMemoryAgentRepository implements AgentRepository {
     this.items.set(agent.id, agent);
   }
 
-  public async findById(id: string): Promise<Agent | null> {
-    return this.items.get(id) ?? null;
+  public async findByIdForUser(
+    id: string,
+    userId: string
+  ): Promise<Agent | null> {
+    const agent = this.items.get(id);
+    return agent && agent.userId === userId ? agent : null;
   }
 
-  public async findAll(): Promise<Agent[]> {
-    return Array.from(this.items.values());
+  public async findAllByUserId(userId: string): Promise<Agent[]> {
+    return Array.from(this.items.values()).filter((a) => a.userId === userId);
   }
 
-  public async deleteById(id: string): Promise<void> {
-    this.items.delete(id);
+  public async deleteByIdForUser(id: string, userId: string): Promise<void> {
+    const agent = this.items.get(id);
+    if (agent && agent.userId === userId) {
+      this.items.delete(id);
+    }
   }
 }
 
@@ -28,26 +35,28 @@ describe("DeleteAgent use case", () => {
     const repo = new InMemoryAgentRepository();
     const agent = Agent.create({
       id: "agent-delete-1",
+      userId: "user-1",
       name: "Temporary Agent",
       description: "To be deleted",
       systemPrompt: "Temporary prompt",
+      provider: "gemini",
       model: "gemini-2.5-flash",
       enabledTools: ["calculator"],
     });
     await repo.save(agent);
 
     const deleteAgent = new DeleteAgent(repo);
-    await deleteAgent.execute("agent-delete-1");
+    await deleteAgent.execute("agent-delete-1", "user-1");
 
-    expect(await repo.findById("agent-delete-1")).toBeNull();
-    expect(await repo.findAll()).toHaveLength(0);
+    expect(await repo.findByIdForUser("agent-delete-1", "user-1")).toBeNull();
+    expect(await repo.findAllByUserId("user-1")).toHaveLength(0);
   });
 
   it("throws when attempting to delete a non-existent agent", async () => {
     const repo = new InMemoryAgentRepository();
     const deleteAgent = new DeleteAgent(repo);
 
-    await expect(deleteAgent.execute("missing-id")).rejects.toThrow(
+    await expect(deleteAgent.execute("missing-id", "user-1")).rejects.toThrow(
       "Agent not found: missing-id"
     );
   });
@@ -56,7 +65,7 @@ describe("DeleteAgent use case", () => {
     const repo = new InMemoryAgentRepository();
     const deleteAgent = new DeleteAgent(repo);
 
-    await expect(deleteAgent.execute("   ")).rejects.toThrow(
+    await expect(deleteAgent.execute("   ", "user-1")).rejects.toThrow(
       "Agent id is required."
     );
   });

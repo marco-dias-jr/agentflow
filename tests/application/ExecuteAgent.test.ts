@@ -18,16 +18,23 @@ class InMemoryAgentRepository implements AgentRepository {
     this.items.set(agent.id, agent);
   }
 
-  public async findById(id: string): Promise<Agent | null> {
-    return this.items.get(id) ?? null;
+  public async findByIdForUser(
+    id: string,
+    userId: string
+  ): Promise<Agent | null> {
+    const agent = this.items.get(id);
+    return agent && agent.userId === userId ? agent : null;
   }
 
-  public async findAll(): Promise<Agent[]> {
-    return Array.from(this.items.values());
+  public async findAllByUserId(userId: string): Promise<Agent[]> {
+    return Array.from(this.items.values()).filter((a) => a.userId === userId);
   }
 
-  public async deleteById(id: string): Promise<void> {
-    this.items.delete(id);
+  public async deleteByIdForUser(id: string, userId: string): Promise<void> {
+    const agent = this.items.get(id);
+    if (agent && agent.userId === userId) {
+      this.items.delete(id);
+    }
   }
 }
 
@@ -42,12 +49,21 @@ class InMemoryExecutionRepository implements ExecutionRepository {
     this.items.set(execution.id, execution);
   }
 
-  public async findById(id: string): Promise<Execution | null> {
-    return this.items.get(id) ?? null;
+  public async findByIdForUser(
+    id: string,
+    userId: string
+  ): Promise<Execution | null> {
+    const exec = this.items.get(id);
+    return exec && exec.userId === userId ? exec : null;
   }
 
-  public async findByAgentId(agentId: string): Promise<Execution[]> {
-    return Array.from(this.items.values()).filter((e) => e.agentId === agentId);
+  public async findByAgentIdForUser(
+    agentId: string,
+    userId: string
+  ): Promise<Execution[]> {
+    return Array.from(this.items.values()).filter(
+      (e) => e.agentId === agentId && e.userId === userId
+    );
   }
 }
 
@@ -90,9 +106,11 @@ describe("ExecuteAgent use case", () => {
 
     const agent = Agent.create({
       id: "agent-ops",
+      userId: "user-1",
       name: "Ops Assistant",
       description: "Helps with calculations",
       systemPrompt: "Use tools when needed.",
+      provider: "mock",
       model: "mock-model",
       enabledTools: ["calculator"],
     });
@@ -107,10 +125,12 @@ describe("ExecuteAgent use case", () => {
 
     const result = await useCase.execute({
       agentId: agent.id,
+      userId: "user-1",
       prompt: "Calculate (10 * 5) + 2",
     });
 
     expect(result.status).toBe("completed");
+    expect(result.provider).toBe("mock");
     expect(result.response).toBe("The result is 52.");
     expect(result.trace.map((step) => step.type)).toEqual([
       "user_message",
