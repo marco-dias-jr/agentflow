@@ -37,9 +37,26 @@ export class ToolRegistryExecutor implements ToolExecutor {
 
   public async execute(
     toolName: string,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
+    allowedTools?: string[]
   ): Promise<ToolExecutionResult> {
     const normalized = toolName.trim().toLowerCase();
+
+    if (allowedTools !== undefined) {
+      const allowedSet = new Set(
+        allowedTools.map((name) => name.trim().toLowerCase())
+      );
+      if (!allowedSet.has(normalized)) {
+        return {
+          toolName,
+          isError: true,
+          output: {
+            error: `Tool '${toolName}' is not enabled for this agent execution.`,
+          },
+        };
+      }
+    }
+
     const tool = this.tools.get(normalized);
 
     if (!tool) {
