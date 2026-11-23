@@ -25,7 +25,7 @@ export function Input({
 }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`af-input w-full rounded-[3px] text-sm disabled:opacity-50 ${className}`.trim()}
+      className={`af-input w-full rounded-[4px] text-sm disabled:opacity-50 ${className}`.trim()}
       {...props}
     />
   );
@@ -37,7 +37,7 @@ export function Textarea({
 }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
-      className={`af-input w-full rounded-[3px] text-sm ${className}`.trim()}
+      className={`af-input w-full rounded-[4px] text-sm ${className}`.trim()}
       {...props}
     />
   );
@@ -49,7 +49,7 @@ export function Select({
 }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`af-input w-full rounded-[3px] text-sm disabled:opacity-50 ${className}`.trim()}
+      className={`af-input w-full rounded-[4px] text-sm disabled:opacity-50 ${className}`.trim()}
       {...props}
     />
   );

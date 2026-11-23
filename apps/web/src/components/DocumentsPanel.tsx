@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, FileText, FileUp, Trash2, Upload, X } from "lucide-react";
+import { FormEvent, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronRight, FileText, FileUp, Search, Trash2, Upload, X } from "lucide-react";
 import { AlertBanner } from "@/components/ui/AlertBanner";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -15,7 +15,7 @@ import {
 interface DocumentsPanelProps {
   documents: DocumentDTO[];
   onDocumentUploaded: (doc: DocumentDTO, deduplicated: boolean) => void;
-  onDeleteDocument?: (doc: DocumentDTO) => Promise<void>;
+  onRequestDeleteDocument?: (doc: DocumentDTO) => void;
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -38,12 +38,13 @@ function fileToBase64(file: File): Promise<string> {
 export function DocumentsPanel({
   documents,
   onDocumentUploaded,
-  onDeleteDocument,
+  onRequestDeleteDocument,
 }: DocumentsPanelProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [title, setTitle] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showRagOptions, setShowRagOptions] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Optional RAG pipeline settings (Phase B1)
   const [parserStrategy, setParserStrategy] = useState<"lightweight" | "strict">(
@@ -60,34 +61,22 @@ export function DocumentsPanel({
   const [embeddingModel, setEmbeddingModel] = useState("");
 
   const [isUploading, setIsUploading] = useState(false);
-  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{
     variant: "info" | "error";
     message: string;
   } | null>(null);
 
-  async function handleDelete(doc: DocumentDTO) {
-    if (!onDeleteDocument) return;
-    setFeedback(null);
-    setDeletingDocId(doc.id);
-    try {
-      await onDeleteDocument(doc);
-      setFeedback({
-        variant: "info",
-        message: `Deleted "${doc.title}" from your account.`,
-      });
-    } catch (err) {
-      setFeedback({
-        variant: "error",
-        message: getUserFriendlyError(
-          err,
-          "We couldn't delete this document right now. Please try again."
-        ),
-      });
-    } finally {
-      setDeletingDocId(null);
-    }
-  }
+  const filteredDocuments = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return documents;
+    return documents.filter(
+      (doc) =>
+        doc.title.toLowerCase().includes(q) ||
+        doc.fileName.toLowerCase().includes(q) ||
+        doc.embeddingProvider.toLowerCase().includes(q) ||
+        doc.chunkStrategy.toLowerCase().includes(q)
+    );
+  }, [documents, searchQuery]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -143,7 +132,7 @@ export function DocumentsPanel({
   }
 
   return (
-    <Card className="space-y-4 p-5">
+    <Card className="space-y-4 rounded-[4px] p-5">
       <div className="flex items-center justify-between">
         <h2
           className="font-display text-xs font-semibold uppercase tracking-widest"
@@ -162,7 +151,7 @@ export function DocumentsPanel({
       {feedback && (
         <AlertBanner
           variant={feedback.variant}
-          className="px-3 py-2 text-xs"
+          className="rounded-[4px] px-3 py-2 text-xs"
           onDismiss={() => setFeedback(null)}
         >
           {feedback.message}
@@ -176,8 +165,9 @@ export function DocumentsPanel({
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            disabled={isUploading}
             placeholder="Incident Runbook v2"
-            className="px-3 py-1.5"
+            className="rounded-[4px] px-3 py-1.5"
           />
         </div>
 
@@ -188,33 +178,39 @@ export function DocumentsPanel({
             type="file"
             id="document-file-input"
             accept=".txt,.md,.markdown,.csv,.json,.log,.pdf,text/plain,text/markdown,text/csv,application/json,application/pdf"
+            disabled={isUploading}
             onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
             className="sr-only"
           />
           <div className="flex items-center gap-2">
             <button
               type="button"
+              disabled={isUploading}
               onClick={() => fileInputRef.current?.click()}
-              className="af-btn-secondary inline-flex items-center gap-1.5 rounded-[3px] border px-3 py-1.5 text-xs font-medium transition-colors hover:opacity-90"
+              className="af-btn-secondary inline-flex items-center gap-1.5 rounded-[4px] border px-3 py-1.5 text-xs font-medium transition-colors hover:opacity-90 disabled:opacity-50 disabled:pointer-events-none"
               style={{ borderColor: "var(--border-default)" }}
             >
               <FileUp className="h-3.5 w-3.5" aria-hidden="true" />
               <span>{selectedFile ? "Change file" : "Choose file"}</span>
             </button>
             {selectedFile ? (
-              <div className="flex min-w-0 flex-1 items-center justify-between gap-1 rounded-[3px] px-2 py-1 text-xs" style={{ backgroundColor: "var(--bg-tertiary)", border: "1px solid var(--border-subtle)" }}>
+              <div
+                className="flex min-w-0 flex-1 items-center justify-between gap-1 rounded-[4px] px-2 py-1 text-xs"
+                style={{ backgroundColor: "var(--bg-tertiary)", border: "1px solid var(--border-subtle)" }}
+              >
                 <span className="truncate" title={selectedFile.name} style={{ color: "var(--text-primary)" }}>
                   {selectedFile.name}
                 </span>
                 <button
                   type="button"
+                  disabled={isUploading}
                   onClick={() => {
                     setSelectedFile(null);
                     if (fileInputRef.current) {
                       fileInputRef.current.value = "";
                     }
                   }}
-                  className="rounded p-0.5 text-xs opacity-70 transition-opacity hover:opacity-100"
+                  className="rounded p-0.5 text-xs opacity-70 transition-opacity hover:opacity-100 disabled:opacity-30 disabled:pointer-events-none"
                   style={{ color: "var(--text-muted)" }}
                   title="Remove selected file"
                   aria-label="Remove selected file"
@@ -233,8 +229,9 @@ export function DocumentsPanel({
         <div>
           <button
             type="button"
+            disabled={isUploading}
             onClick={() => setShowRagOptions((prev) => !prev)}
-            className="flex items-center gap-1 text-xs font-medium opacity-80 transition-opacity hover:opacity-100"
+            className="flex items-center gap-1 text-xs font-medium opacity-80 transition-opacity hover:opacity-100 disabled:opacity-50 disabled:pointer-events-none"
             style={{ color: "var(--text-secondary)" }}
           >
             {showRagOptions ? (
@@ -246,18 +243,19 @@ export function DocumentsPanel({
           </button>
 
           {showRagOptions && (
-            <div className="af-surface-inset mt-2 space-y-2.5 rounded-[3px] p-3">
+            <div className="af-surface-inset mt-2 space-y-2.5 rounded-[4px] p-3">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <FieldLabel>Parser</FieldLabel>
                   <Select
                     value={parserStrategy}
+                    disabled={isUploading}
                     onChange={(e) =>
                       setParserStrategy(
                         e.target.value as "lightweight" | "strict"
                       )
                     }
-                    className="px-2.5 py-1 text-xs"
+                    className="rounded-[4px] px-2.5 py-1 text-xs"
                   >
                     <option value="lightweight">Lightweight</option>
                     <option value="strict">Strict UTF-8</option>
@@ -268,12 +266,13 @@ export function DocumentsPanel({
                   <FieldLabel>Chunking</FieldLabel>
                   <Select
                     value={chunkStrategy}
+                    disabled={isUploading}
                     onChange={(e) =>
                       setChunkStrategy(
                         e.target.value as "fixed" | "paragraph" | "sentence"
                       )
                     }
-                    className="px-2.5 py-1 text-xs"
+                    className="rounded-[4px] px-2.5 py-1 text-xs"
                   >
                     <option value="fixed">Fixed</option>
                     <option value="paragraph">Paragraph</option>
@@ -290,10 +289,11 @@ export function DocumentsPanel({
                     min={100}
                     max={4000}
                     value={chunkSize}
+                    disabled={isUploading}
                     onChange={(e) =>
                       setChunkSize(Number(e.target.value) || 800)
                     }
-                    className="px-2.5 py-1 text-xs"
+                    className="rounded-[4px] px-2.5 py-1 text-xs"
                   />
                 </div>
                 <div>
@@ -303,10 +303,11 @@ export function DocumentsPanel({
                     min={0}
                     max={2000}
                     value={chunkOverlap}
+                    disabled={isUploading}
                     onChange={(e) =>
                       setChunkOverlap(Number(e.target.value) || 0)
                     }
-                    className="px-2.5 py-1 text-xs"
+                    className="rounded-[4px] px-2.5 py-1 text-xs"
                   />
                 </div>
               </div>
@@ -316,12 +317,13 @@ export function DocumentsPanel({
                   <FieldLabel>Embedding Provider</FieldLabel>
                   <Select
                     value={embeddingProvider}
+                    disabled={isUploading}
                     onChange={(e) =>
                       setEmbeddingProvider(
                         e.target.value as "auto" | "gemini" | "ollama" | "local"
                       )
                     }
-                    className="px-2.5 py-1 text-xs"
+                    className="rounded-[4px] px-2.5 py-1 text-xs"
                   >
                     <option value="auto">Auto</option>
                     <option value="gemini">Gemini</option>
@@ -334,9 +336,10 @@ export function DocumentsPanel({
                   <Input
                     type="text"
                     value={embeddingModel}
+                    disabled={isUploading}
                     onChange={(e) => setEmbeddingModel(e.target.value)}
                     placeholder="Default"
-                    className="px-2.5 py-1 text-xs"
+                    className="rounded-[4px] px-2.5 py-1 text-xs"
                   />
                 </div>
               </div>
@@ -348,7 +351,7 @@ export function DocumentsPanel({
           type="submit"
           variant="secondary"
           disabled={isUploading || !selectedFile}
-          className="flex w-full items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold"
+          className="flex w-full items-center justify-center gap-1.5 rounded-[4px] px-3 py-2 text-xs font-semibold"
         >
           <Upload className="h-3.5 w-3.5" aria-hidden="true" />
           {isUploading ? "Indexing..." : "Upload Document"}
@@ -356,19 +359,49 @@ export function DocumentsPanel({
       </form>
 
       <div
-        className="border-t pt-3"
+        className="space-y-2 border-t pt-3"
         style={{ borderColor: "var(--border-subtle)" }}
       >
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
+            style={{ color: "var(--text-muted)" }}
+            aria-hidden="true"
+          />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search account documents..."
+            className="af-input w-full rounded-[4px] py-1.5 pl-8 pr-7 text-xs"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-xs opacity-60 hover:opacity-100"
+              style={{ color: "var(--text-muted)" }}
+              aria-label="Clear search"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+
         {documents.length === 0 ? (
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
             No documents uploaded yet. Files uploaded here can be reused across any of your agents.
           </p>
+        ) : filteredDocuments.length === 0 ? (
+          <p className="py-2 text-xs" style={{ color: "var(--text-muted)" }}>
+            No documents match &quot;{searchQuery}&quot;.
+          </p>
         ) : (
-          <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
-            {documents.map((doc) => (
+          <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+            {filteredDocuments.map((doc) => (
               <li
                 key={doc.id}
-                className="af-surface-inset rounded-[3px] px-3 py-2 text-xs"
+                className="af-surface-inset rounded-[4px] px-3 py-2 text-xs"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-1.5">
@@ -390,12 +423,11 @@ export function DocumentsPanel({
                     >
                       {doc.chunkCount} chunks
                     </span>
-                    {onDeleteDocument && (
+                    {onRequestDeleteDocument && (
                       <button
                         type="button"
-                        onClick={() => void handleDelete(doc)}
-                        disabled={deletingDocId === doc.id}
-                        className="rounded p-1 opacity-70 transition-opacity hover:opacity-100 disabled:opacity-40"
+                        onClick={() => onRequestDeleteDocument(doc)}
+                        className="rounded-[4px] p-1 opacity-70 transition-opacity hover:opacity-100"
                         style={{ color: "var(--danger-text)" }}
                         title="Delete document"
                         aria-label={`Delete ${doc.title}`}

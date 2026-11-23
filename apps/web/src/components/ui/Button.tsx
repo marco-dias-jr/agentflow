@@ -23,17 +23,17 @@ export function Button({
   const dangerStyle =
     variant === "danger"
       ? {
-          backgroundColor: "var(--danger-bg)",
-          borderColor: "var(--danger-border)",
-          color: "var(--danger-text)",
-          ...style,
-        }
+        backgroundColor: "var(--danger-bg)",
+        borderColor: "var(--danger-border)",
+        color: "var(--danger-text)",
+        ...style,
+      }
       : style;
 
   return (
     <button
       type={type}
-      className={`${variantClass} rounded-[3px] disabled:opacity-50 ${className}`.trim()}
+      className={`inline-flex items-center justify-center gap-1.5 ${variantClass} rounded-[4px] disabled:opacity-50 ${className}`.trim()}
       style={dangerStyle}
       {...props}
     />

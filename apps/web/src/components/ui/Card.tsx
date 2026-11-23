@@ -6,7 +6,7 @@ export function Card({
 }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`af-card rounded-[3px] ${className}`.trim()}
+      className={`af-card rounded-[4px] ${className}`.trim()}
       {...props}
     />
   );
@@ -18,7 +18,7 @@ export function SurfaceInset({
 }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`af-surface-inset rounded-[3px] ${className}`.trim()}
+      className={`af-surface-inset rounded-[4px] ${className}`.trim()}
       {...props}
     />
   );

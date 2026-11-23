@@ -13,6 +13,7 @@ interface ToolSelectorProps {
   keyPrefix?: string;
   inactiveSurface?: "tertiary" | "secondary";
   compact?: boolean;
+  disabled?: boolean;
 }
 
 export function ToolSelector({
@@ -23,6 +24,7 @@ export function ToolSelector({
   keyPrefix = "",
   inactiveSurface = "tertiary",
   compact = false,
+  disabled = false,
 }: ToolSelectorProps) {
   const inactiveBg =
     inactiveSurface === "secondary"
@@ -50,8 +52,9 @@ export function ToolSelector({
             <button
               key={`${keyPrefix}${tool.id}`}
               type="button"
+              disabled={disabled}
               onClick={() => onToggle(tool.id)}
-              className={`flex items-center gap-1.5 rounded-[3px] border px-3 ${compact ? "py-1" : "py-1.5"} text-xs font-medium transition-all duration-200`}
+              className={`flex items-center gap-1.5 rounded-[4px] border px-3 ${compact ? "py-1" : "py-1.5"} text-xs font-medium transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none`}
               style={
                 checked
                   ? {
@@ -67,11 +70,11 @@ export function ToolSelector({
               }
             >
               {checked ? (
-                <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                <Check className="h-3 w-3 shrink-0" aria-hidden="true" />
               ) : (
-                <X className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+                <X className="h-3 w-3 shrink-0 opacity-40" aria-hidden="true" />
               )}
-              {tool.label}
+              <span>{tool.label}</span>
             </button>
           );
         })}
