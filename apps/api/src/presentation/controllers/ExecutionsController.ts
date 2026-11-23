@@ -93,6 +93,10 @@ export class ExecutionsController {
       maxToolIterations: parsed.data.maxToolIterations,
     });
 
+    console.log(
+      `[API] Execution ${execution.id} for agent ${agentId} finished with status=${execution.status} (${execution.trace.length} trace steps)`
+    );
+
     return { data: execution };
   }
 

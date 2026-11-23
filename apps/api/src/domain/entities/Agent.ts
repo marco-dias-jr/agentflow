@@ -8,15 +8,24 @@ export interface CreateAgentInput {
   now?: Date;
 }
 
+export interface UpdateAgentInput {
+  name?: string;
+  description?: string;
+  systemPrompt?: string;
+  model?: string;
+  enabledTools?: string[];
+  now?: Date;
+}
+
 export class Agent {
   public readonly id: string;
-  public readonly name: string;
-  public readonly description: string;
-  public readonly systemPrompt: string;
-  public readonly model: string;
-  public readonly enabledTools: string[];
+  public name: string;
+  public description: string;
+  public systemPrompt: string;
+  public model: string;
+  public enabledTools: string[];
   public readonly createdAt: Date;
-  public readonly updatedAt: Date;
+  public updatedAt: Date;
 
   private constructor(props: {
     id: string;
@@ -38,6 +47,12 @@ export class Agent {
     this.updatedAt = props.updatedAt;
   }
 
+  private static normalizeTools(tools: string[]): string[] {
+    return Array.from(
+      new Set(tools.map((tool) => tool.trim()).filter(Boolean))
+    );
+  }
+
   public static create(input: CreateAgentInput): Agent {
     const name = input.name.trim();
     const systemPrompt = input.systemPrompt.trim();
@@ -57,9 +72,7 @@ export class Agent {
     }
 
     const timestamp = input.now ?? new Date();
-    const uniqueTools = Array.from(
-      new Set(input.enabledTools.map((tool) => tool.trim()).filter(Boolean))
-    );
+    const uniqueTools = Agent.normalizeTools(input.enabledTools);
 
     return new Agent({
       id: input.id.trim(),
@@ -71,5 +84,41 @@ export class Agent {
       createdAt: timestamp,
       updatedAt: timestamp,
     });
+  }
+
+  public update(input: UpdateAgentInput): void {
+    if (input.name !== undefined) {
+      const normalizedName = input.name.trim();
+      if (!normalizedName) {
+        throw new Error("Agent name is required.");
+      }
+      this.name = normalizedName;
+    }
+
+    if (input.description !== undefined) {
+      this.description = input.description.trim();
+    }
+
+    if (input.systemPrompt !== undefined) {
+      const normalizedPrompt = input.systemPrompt.trim();
+      if (!normalizedPrompt) {
+        throw new Error("Agent systemPrompt is required.");
+      }
+      this.systemPrompt = normalizedPrompt;
+    }
+
+    if (input.model !== undefined) {
+      const normalizedModel = input.model.trim();
+      if (!normalizedModel) {
+        throw new Error("Agent model is required.");
+      }
+      this.model = normalizedModel;
+    }
+
+    if (input.enabledTools !== undefined) {
+      this.enabledTools = Agent.normalizeTools(input.enabledTools);
+    }
+
+    this.updatedAt = input.now ?? new Date();
   }
 }

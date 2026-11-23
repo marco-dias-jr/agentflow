@@ -4,10 +4,14 @@ import { FormEvent, useEffect, useState } from "react";
 import {
   AgentDTO,
   createAgent,
+  deleteAgent,
   executeAgentPrompt,
   ExecutionDTO,
   listAgents,
   listExecutions,
+  listModels,
+  ModelOptionDTO,
+  updateAgent,
 } from "@/lib/api";
 
 const AVAILABLE_TOOLS = [
@@ -18,6 +22,8 @@ const AVAILABLE_TOOLS = [
 export default function AgentFlowPage() {
   const [agents, setAgents] = useState<AgentDTO[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [models, setModels] = useState<ModelOptionDTO[]>([]);
+  const [activeProvider, setActiveProvider] = useState<string>("");
   const [executions, setExecutions] = useState<ExecutionDTO[]>([]);
   const [selectedExecutionId, setSelectedExecutionId] = useState<string>("");
 
@@ -27,15 +33,25 @@ export default function AgentFlowPage() {
   const [systemPrompt, setSystemPrompt] = useState(
     "You are a helpful operational assistant. Use available tools when accurate calculations or runbooks are needed."
   );
-  const [model, setModel] = useState("gemini-2.5-flash");
+  const [model, setModel] = useState("");
   const [enabledTools, setEnabledTools] = useState<string[]>([
     "calculator",
     "knowledge_search",
   ]);
 
+  // Edit selected agent state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editSystemPrompt, setEditSystemPrompt] = useState("");
+  const [editModel, setEditModel] = useState("");
+  const [editTools, setEditTools] = useState<string[]>([]);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   // Chat prompt state
   const [prompt, setPrompt] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -47,14 +63,36 @@ export default function AgentFlowPage() {
     executions[0] ??
     null;
 
+  async function refreshModels() {
+    try {
+      const data = await listModels();
+      setActiveProvider(data.activeProvider);
+      setModels(data.models);
+      if (data.models.length > 0) {
+        const preferred =
+          data.models.find((m) => m.provider === data.activeProvider) ??
+          data.models[0];
+        setModel((prev) =>
+          data.models.some((m) => m.id === prev) ? prev : preferred.id
+        );
+      } else {
+        setModel("");
+      }
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Unable to load models."
+      );
+    }
+  }
+
   async function refreshAgents(preferredId?: string) {
     try {
       const data = await listAgents();
       setAgents(data);
-      if (preferredId) {
+      if (preferredId && data.some((a) => a.id === preferredId)) {
         setSelectedAgentId(preferredId);
-      } else if (!selectedAgentId && data.length > 0) {
-        setSelectedAgentId(data[0].id);
+      } else if (!data.some((a) => a.id === selectedAgentId)) {
+        setSelectedAgentId(data[0]?.id ?? "");
       }
     } catch (err) {
       setErrorMessage(
@@ -66,6 +104,7 @@ export default function AgentFlowPage() {
   async function refreshExecutions(agentId: string, preferredExecId?: string) {
     if (!agentId) {
       setExecutions([]);
+      setSelectedExecutionId("");
       return;
     }
     try {
@@ -86,18 +125,40 @@ export default function AgentFlowPage() {
   }
 
   useEffect(() => {
+    void refreshModels();
     void refreshAgents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    setIsEditing(false);
     if (selectedAgentId) {
       void refreshExecutions(selectedAgentId);
+    } else {
+      setExecutions([]);
+      setSelectedExecutionId("");
     }
   }, [selectedAgentId]);
 
-  function toggleTool(toolId: string) {
+  function openEditForm(agent: AgentDTO) {
+    setEditName(agent.name);
+    setEditDescription(agent.description);
+    setEditSystemPrompt(agent.systemPrompt);
+    setEditModel(agent.model);
+    setEditTools(agent.enabledTools);
+    setIsEditing(true);
+  }
+
+  function toggleCreateTool(toolId: string) {
     setEnabledTools((prev) =>
+      prev.includes(toolId)
+        ? prev.filter((item) => item !== toolId)
+        : [...prev, toolId]
+    );
+  }
+
+  function toggleEditTool(toolId: string) {
+    setEditTools((prev) =>
       prev.includes(toolId)
         ? prev.filter((item) => item !== toolId)
         : [...prev, toolId]
@@ -106,6 +167,10 @@ export default function AgentFlowPage() {
 
   async function handleCreateAgent(e: FormEvent) {
     e.preventDefault();
+    if (!model) {
+      setErrorMessage("Configure at least one model in your environment (.env).");
+      return;
+    }
     setErrorMessage(null);
     setIsCreating(true);
     try {
@@ -125,6 +190,49 @@ export default function AgentFlowPage() {
       );
     } finally {
       setIsCreating(false);
+    }
+  }
+
+  async function handleSaveEdit(e: FormEvent) {
+    e.preventDefault();
+    if (!selectedAgent) return;
+    setErrorMessage(null);
+    setIsSavingEdit(true);
+    try {
+      const updated = await updateAgent(selectedAgent.id, {
+        name: editName,
+        description: editDescription,
+        systemPrompt: editSystemPrompt,
+        model: editModel,
+        enabledTools: editTools,
+      });
+      setIsEditing(false);
+      await refreshAgents(updated.id);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to update agent."
+      );
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
+
+  async function handleDeleteAgent(agent: AgentDTO) {
+    setErrorMessage(null);
+    setIsDeleting(true);
+    try {
+      await deleteAgent(agent.id);
+      const remaining = agents.filter((item) => item.id !== agent.id);
+      setAgents(remaining);
+      if (selectedAgentId === agent.id) {
+        setSelectedAgentId(remaining[0]?.id ?? "");
+      }
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Failed to delete agent."
+      );
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -148,13 +256,19 @@ export default function AgentFlowPage() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8">
-      <header className="mb-8 border-b border-slate-800 pb-4">
-        <h1 className="text-2xl font-bold tracking-tight text-white">
-          AgentFlow — AI Agent Platform
-        </h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Configure agents, execute tool-calling prompts, and inspect execution traces.
-        </p>
+      <header className="mb-8 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-white">
+            AgentFlow — AI Agent Platform
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            Configure agents, switch models, edit tools, and inspect execution traces.
+          </p>
+        </div>
+        <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-300">
+          Active Provider:{" "}
+          <strong className="text-sky-400">{activeProvider || "not set"}</strong>
+        </span>
       </header>
 
       {errorMessage && (
@@ -236,14 +350,22 @@ export default function AgentFlowPage() {
 
             <div>
               <label className="mb-1 block text-xs text-slate-400">Model</label>
-              <input
-                type="text"
-                required
+              <select
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                placeholder="gemini-2.5-flash"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
-              />
+                disabled={models.length === 0}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none disabled:opacity-50"
+              >
+                {models.length === 0 ? (
+                  <option value="">No models configured in .env</option>
+                ) : (
+                  models.map((opt) => (
+                    <option key={`${opt.provider}-${opt.id}`} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
 
             <div>
@@ -268,7 +390,7 @@ export default function AgentFlowPage() {
                     <button
                       key={tool.id}
                       type="button"
-                      onClick={() => toggleTool(tool.id)}
+                      onClick={() => toggleCreateTool(tool.id)}
                       className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
                         checked
                           ? "border-emerald-500 bg-emerald-950/50 text-emerald-200"
@@ -284,7 +406,7 @@ export default function AgentFlowPage() {
 
             <button
               type="submit"
-              disabled={isCreating}
+              disabled={isCreating || models.length === 0}
               className="w-full rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:opacity-50"
             >
               {isCreating ? "Creating..." : "Create Agent"}
@@ -292,7 +414,7 @@ export default function AgentFlowPage() {
           </form>
         </section>
 
-        {/* Right Column: Conversation + Execution History + Execution Trace */}
+        {/* Right Column: Selected Agent + Edit/Delete + Conversation + Trace */}
         <section className="space-y-6 lg:col-span-8">
           <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
             {!selectedAgent ? (
@@ -301,33 +423,168 @@ export default function AgentFlowPage() {
               </p>
             ) : (
               <>
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-3">
                   <div>
                     <h2 className="text-lg font-semibold text-white">
                       {selectedAgent.name}
                     </h2>
                     <p className="text-xs text-slate-400">
                       {selectedAgent.description || "No description"} ·{" "}
-                      {selectedAgent.model}
+                      <span className="font-mono text-sky-300">
+                        {selectedAgent.model}
+                      </span>
                     </p>
                   </div>
-                  <div className="flex gap-1.5">
-                    {selectedAgent.enabledTools.length === 0 ? (
-                      <span className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">
-                        No tools
-                      </span>
-                    ) : (
-                      selectedAgent.enabledTools.map((t) => (
-                        <span
-                          key={t}
-                          className="rounded bg-emerald-950 px-2 py-0.5 text-xs text-emerald-300"
-                        >
-                          {t}
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex gap-1.5">
+                      {selectedAgent.enabledTools.length === 0 ? (
+                        <span className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">
+                          No tools
                         </span>
-                      ))
-                    )}
+                      ) : (
+                        selectedAgent.enabledTools.map((t) => (
+                          <span
+                            key={t}
+                            className="rounded bg-emerald-950 px-2 py-0.5 text-xs text-emerald-300"
+                          >
+                            {t}
+                          </span>
+                        ))
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        isEditing
+                          ? setIsEditing(false)
+                          : openEditForm(selectedAgent)
+                      }
+                      className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-600"
+                    >
+                      {isEditing ? "Cancel Edit" : "Edit Agent"}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isDeleting}
+                      onClick={() => void handleDeleteAgent(selectedAgent)}
+                      className="rounded-lg border border-red-500/40 bg-red-950/50 px-3 py-1.5 text-xs font-medium text-red-200 hover:bg-red-900/60 disabled:opacity-50"
+                    >
+                      {isDeleting ? "Deleting..." : "Delete Agent"}
+                    </button>
                   </div>
                 </div>
+
+                {isEditing && (
+                  <form
+                    onSubmit={handleSaveEdit}
+                    className="mb-4 space-y-3 rounded-lg border border-slate-800 bg-slate-950/80 p-3.5"
+                  >
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-sky-400">
+                      Edit Agent Configuration
+                    </h3>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs text-slate-400">
+                          Name
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white focus:border-sky-500 focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-xs text-slate-400">
+                          Model
+                        </label>
+                        <select
+                          value={editModel}
+                          onChange={(e) => setEditModel(e.target.value)}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white focus:border-sky-500 focus:outline-none"
+                        >
+                          {!models.some((m) => m.id === editModel) && (
+                            <option value={editModel}>{editModel} (Current)</option>
+                          )}
+                          {models.map((opt) => (
+                            <option
+                              key={`edit-${opt.provider}-${opt.id}`}
+                              value={opt.id}
+                            >
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs text-slate-400">
+                        Description
+                      </label>
+                      <input
+                        type="text"
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white focus:border-sky-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs text-slate-400">
+                        System Prompt
+                      </label>
+                      <textarea
+                        rows={3}
+                        required
+                        value={editSystemPrompt}
+                        onChange={(e) => setEditSystemPrompt(e.target.value)}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white focus:border-sky-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <span className="mb-1 block text-xs text-slate-400">
+                        Active Tools
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {AVAILABLE_TOOLS.map((tool) => {
+                          const checked = editTools.includes(tool.id);
+                          return (
+                            <button
+                              key={`edit-tool-${tool.id}`}
+                              type="button"
+                              onClick={() => toggleEditTool(tool.id)}
+                              className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
+                                checked
+                                  ? "border-emerald-500 bg-emerald-950/50 text-emerald-200"
+                                  : "border-slate-700 bg-slate-900 text-slate-400"
+                              }`}
+                            >
+                              {tool.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="submit"
+                        disabled={isSavingEdit}
+                        className="rounded-lg bg-sky-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
+                      >
+                        {isSavingEdit ? "Saving..." : "Save Changes"}
+                      </button>
+                    </div>
+                  </form>
+                )}
 
                 <form onSubmit={handleRunPrompt} className="flex gap-2">
                   <input

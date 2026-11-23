@@ -3,8 +3,10 @@ import { Pool } from "pg";
 import { LLMProvider } from "./application/ports/LLMProvider";
 import { ToolExecutor } from "./application/ports/ToolExecutor";
 import { CreateAgent } from "./application/use-cases/CreateAgent";
+import { DeleteAgent } from "./application/use-cases/DeleteAgent";
 import { ExecuteAgent } from "./application/use-cases/ExecuteAgent";
 import { GetExecutionHistory } from "./application/use-cases/GetExecutionHistory";
+import { UpdateAgent } from "./application/use-cases/UpdateAgent";
 import { AgentRepository } from "./domain/repositories/AgentRepository";
 import { ExecutionRepository } from "./domain/repositories/ExecutionRepository";
 import { PostgresAgentRepository } from "./infrastructure/database/PostgresAgentRepository";
@@ -16,12 +18,15 @@ import {
   AGENT_REPOSITORY_TOKEN,
   AgentsController,
   CREATE_AGENT_USE_CASE_TOKEN,
+  DELETE_AGENT_USE_CASE_TOKEN,
+  UPDATE_AGENT_USE_CASE_TOKEN,
 } from "./presentation/controllers/AgentsController";
 import {
   EXECUTE_AGENT_USE_CASE_TOKEN,
   ExecutionsController,
   GET_EXECUTION_HISTORY_USE_CASE_TOKEN,
 } from "./presentation/controllers/ExecutionsController";
+import { ModelsController } from "./presentation/controllers/ModelsController";
 
 const PG_POOL_TOKEN = Symbol("PG_POOL_TOKEN");
 const EXECUTION_REPOSITORY_TOKEN = Symbol("EXECUTION_REPOSITORY_TOKEN");
@@ -29,7 +34,7 @@ const LLM_PROVIDER_TOKEN = Symbol("LLM_PROVIDER_TOKEN");
 const TOOL_EXECUTOR_TOKEN = Symbol("TOOL_EXECUTOR_TOKEN");
 
 @Module({
-  controllers: [AgentsController, ExecutionsController],
+  controllers: [AgentsController, ExecutionsController, ModelsController],
   providers: [
     {
       provide: PG_POOL_TOKEN,
@@ -56,6 +61,16 @@ const TOOL_EXECUTOR_TOKEN = Symbol("TOOL_EXECUTOR_TOKEN");
     {
       provide: CREATE_AGENT_USE_CASE_TOKEN,
       useFactory: (agentRepo: AgentRepository) => new CreateAgent(agentRepo),
+      inject: [AGENT_REPOSITORY_TOKEN],
+    },
+    {
+      provide: UPDATE_AGENT_USE_CASE_TOKEN,
+      useFactory: (agentRepo: AgentRepository) => new UpdateAgent(agentRepo),
+      inject: [AGENT_REPOSITORY_TOKEN],
+    },
+    {
+      provide: DELETE_AGENT_USE_CASE_TOKEN,
+      useFactory: (agentRepo: AgentRepository) => new DeleteAgent(agentRepo),
       inject: [AGENT_REPOSITORY_TOKEN],
     },
     {
