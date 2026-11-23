@@ -55,6 +55,26 @@ export default function AgentFlowPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Theme state ("dark" = Black UI, "light" = White UI)
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("agentflow-theme");
+    if (saved === "light" || saved === "dark") {
+      setTheme(saved);
+      document.documentElement.setAttribute("data-theme", saved);
+    } else {
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+  }, []);
+
+  function toggleTheme(nextTheme?: "dark" | "light") {
+    const resolved = nextTheme ?? (theme === "dark" ? "light" : "dark");
+    setTheme(resolved);
+    document.documentElement.setAttribute("data-theme", resolved);
+    window.localStorage.setItem("agentflow-theme", resolved);
+  }
+
   const selectedAgent =
     agents.find((agent) => agent.id === selectedAgentId) ?? null;
 
@@ -255,41 +275,193 @@ export default function AgentFlowPage() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8">
-      <header className="mb-8 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">
-            AgentFlow — AI Agent Platform
-          </h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Configure agents, switch models, edit tools, and inspect execution traces.
-          </p>
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <header
+        className="animate-fade-in-up mb-8 flex flex-wrap items-center justify-between gap-4 border-b pb-5"
+        style={{ borderColor: "var(--border-subtle)" }}
+      >
+        <div className="flex items-center gap-3.5">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-xl border font-display text-sm font-bold tracking-tighter shadow-sm transition-all duration-300"
+            style={{
+              backgroundColor: "var(--accent-bg)",
+              color: "var(--accent-text)",
+              borderColor: "var(--border-default)",
+            }}
+          >
+            AF
+          </div>
+          <div>
+            <div className="flex items-center gap-2.5">
+              <h1
+                className="font-display text-2xl font-bold tracking-tight"
+                style={{ color: "var(--text-primary)" }}
+              >
+                AgentFlow
+              </h1>
+              <span
+                className="font-mono-tech rounded-md border px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest"
+                style={{
+                  backgroundColor: "var(--badge-bg)",
+                  borderColor: "var(--badge-border)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                AI Agent Platform
+              </span>
+            </div>
+            <p
+              className="mt-1 text-sm"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Configure agents, switch models, edit tools, and inspect execution traces.
+            </p>
+          </div>
         </div>
-        <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-300">
-          Active Provider:{" "}
-          <strong className="text-sky-400">{activeProvider || "not set"}</strong>
-        </span>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <span
+            className="af-surface-inset inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            <span
+              className="animate-pulse-dot h-2 w-2 rounded-full"
+              style={{
+                backgroundColor: activeProvider
+                  ? "var(--text-primary)"
+                  : "var(--text-muted)",
+              }}
+            />
+            <span>Active Provider:</span>
+            <strong
+              className="font-mono-tech font-semibold uppercase tracking-wider"
+              style={{ color: "var(--text-primary)" }}
+            >
+              {activeProvider || "not set"}
+            </strong>
+          </span>
+
+          {/* Theme Switcher: Black UI / White UI */}
+          <div
+            className="af-surface-inset inline-flex items-center rounded-full p-1"
+            role="group"
+            aria-label="Color theme switcher"
+          >
+            <button
+              type="button"
+              onClick={() => toggleTheme("dark")}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all duration-300"
+              style={
+                theme === "dark"
+                  ? {
+                      backgroundColor: "var(--accent-bg)",
+                      color: "var(--accent-text)",
+                    }
+                  : {
+                      color: "var(--text-secondary)",
+                    }
+              }
+            >
+              <svg
+                className="h-3.5 w-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+              </svg>
+              <span>Black</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleTheme("light")}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all duration-300"
+              style={
+                theme === "light"
+                  ? {
+                      backgroundColor: "var(--accent-bg)",
+                      color: "var(--accent-text)",
+                    }
+                  : {
+                      color: "var(--text-secondary)",
+                    }
+              }
+            >
+              <svg
+                className="h-3.5 w-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2" />
+                <path d="M12 20v2" />
+                <path d="m4.93 4.93 1.41 1.41" />
+                <path d="m17.66 17.66 1.41 1.41" />
+                <path d="M2 12h2" />
+                <path d="M20 12h2" />
+                <path d="m6.34 17.66-1.41 1.41" />
+                <path d="m19.07 4.93-1.41 1.41" />
+              </svg>
+              <span>White</span>
+            </button>
+          </div>
+        </div>
       </header>
 
       {errorMessage && (
-        <div className="mb-6 rounded-lg border border-red-500/40 bg-red-950/50 px-4 py-3 text-sm text-red-200">
-          {errorMessage}
+        <div
+          className="animate-slide-reveal mb-6 flex items-center justify-between rounded-xl border px-4 py-3 text-sm"
+          style={{
+            backgroundColor: "var(--danger-bg)",
+            borderColor: "var(--danger-border)",
+            color: "var(--danger-text)",
+          }}
+        >
+          <span>{errorMessage}</span>
+          <button
+            type="button"
+            onClick={() => setErrorMessage(null)}
+            className="ml-4 text-xs font-semibold uppercase tracking-wider opacity-75 transition-opacity hover:opacity-100"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Left Column: Agents list + Create Agent */}
-        <section className="space-y-6 lg:col-span-4">
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-300">
-              Agents ({agents.length})
-            </h2>
+        <section
+          className="animate-fade-in-up space-y-6 lg:col-span-4"
+          style={{ animationDelay: "60ms" }}
+        >
+          <div className="af-card rounded-2xl p-5">
+            <div className="mb-3.5 flex items-center justify-between">
+              <h2
+                className="font-display text-xs font-semibold uppercase tracking-widest"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Agents ({agents.length})
+              </h2>
+              <span
+                className="font-mono-tech text-[11px]"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Directory
+              </span>
+            </div>
             {agents.length === 0 ? (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                 No agents created yet. Create one below.
               </p>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-2.5">
                 {agents.map((agent) => {
                   const active = agent.id === selectedAgentId;
                   return (
@@ -297,14 +469,25 @@ export default function AgentFlowPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedAgentId(agent.id)}
-                        className={`w-full rounded-lg border px-3 py-2.5 text-left transition ${
-                          active
-                            ? "border-sky-500 bg-sky-950/40 text-white"
-                            : "border-slate-800 bg-slate-950/50 text-slate-300 hover:border-slate-700"
+                        className={`w-full rounded-xl px-3.5 py-3 text-left ${
+                          active ? "af-item-card-active" : "af-item-card"
                         }`}
                       >
-                        <div className="font-medium">{agent.name}</div>
-                        <div className="mt-0.5 text-xs text-slate-400">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-display font-semibold">
+                            {agent.name}
+                          </span>
+                          {active && (
+                            <span
+                              className="h-1.5 w-1.5 rounded-full"
+                              style={{ backgroundColor: "var(--text-primary)" }}
+                            />
+                          )}
+                        </div>
+                        <div
+                          className="font-mono-tech mt-1 text-xs"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
                           Model: {agent.model}
                         </div>
                       </button>
@@ -317,26 +500,45 @@ export default function AgentFlowPage() {
 
           <form
             onSubmit={handleCreateAgent}
-            className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-4"
+            className="af-card space-y-3.5 rounded-2xl p-5"
           >
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
-              Create Agent
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2
+                className="font-display text-xs font-semibold uppercase tracking-widest"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Create Agent
+              </h2>
+              <span
+                className="font-mono-tech text-[11px]"
+                style={{ color: "var(--text-muted)" }}
+              >
+                New Instance
+              </span>
+            </div>
 
             <div>
-              <label className="mb-1 block text-xs text-slate-400">Name</label>
+              <label
+                className="mb-1.5 block text-xs font-medium"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Name
+              </label>
               <input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Support Assistant"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                className="af-input w-full rounded-xl px-3.5 py-2 text-sm"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-slate-400">
+              <label
+                className="mb-1.5 block text-xs font-medium"
+                style={{ color: "var(--text-secondary)" }}
+              >
                 Description
               </label>
               <input
@@ -344,17 +546,22 @@ export default function AgentFlowPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Handles operational troubleshooting and calculations"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                className="af-input w-full rounded-xl px-3.5 py-2 text-sm"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-slate-400">Model</label>
+              <label
+                className="mb-1.5 block text-xs font-medium"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Model
+              </label>
               <select
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 disabled={models.length === 0}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none disabled:opacity-50"
+                className="af-input w-full rounded-xl px-3.5 py-2 text-sm disabled:opacity-50"
               >
                 {models.length === 0 ? (
                   <option value="">No models configured in .env</option>
@@ -369,7 +576,10 @@ export default function AgentFlowPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-slate-400">
+              <label
+                className="mb-1.5 block text-xs font-medium"
+                style={{ color: "var(--text-secondary)" }}
+              >
                 System Prompt
               </label>
               <textarea
@@ -377,12 +587,17 @@ export default function AgentFlowPage() {
                 required
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                className="af-input w-full rounded-xl px-3.5 py-2 text-sm"
               />
             </div>
 
             <div>
-              <span className="mb-1 block text-xs text-slate-400">Tools</span>
+              <span
+                className="mb-1.5 block text-xs font-medium"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Tools
+              </span>
               <div className="flex flex-wrap gap-2">
                 {AVAILABLE_TOOLS.map((tool) => {
                   const checked = enabledTools.includes(tool.id);
@@ -391,11 +606,20 @@ export default function AgentFlowPage() {
                       key={tool.id}
                       type="button"
                       onClick={() => toggleCreateTool(tool.id)}
-                      className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
+                      className="rounded-lg border px-3 py-1.5 text-xs font-medium transition-all duration-200"
+                      style={
                         checked
-                          ? "border-emerald-500 bg-emerald-950/50 text-emerald-200"
-                          : "border-slate-700 bg-slate-950 text-slate-400"
-                      }`}
+                          ? {
+                              backgroundColor: "var(--badge-active-bg)",
+                              borderColor: "var(--badge-active-border)",
+                              color: "var(--badge-active-text)",
+                            }
+                          : {
+                              backgroundColor: "var(--bg-tertiary)",
+                              borderColor: "var(--border-default)",
+                              color: "var(--text-secondary)",
+                            }
+                      }
                     >
                       {tool.label}
                     </button>
@@ -407,7 +631,7 @@ export default function AgentFlowPage() {
             <button
               type="submit"
               disabled={isCreating || models.length === 0}
-              className="w-full rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:opacity-50"
+              className="af-btn-primary w-full rounded-xl px-4 py-2.5 text-sm font-semibold tracking-tight disabled:opacity-50"
             >
               {isCreating ? "Creating..." : "Create Agent"}
             </button>
@@ -415,22 +639,37 @@ export default function AgentFlowPage() {
         </section>
 
         {/* Right Column: Selected Agent + Edit/Delete + Conversation + Trace */}
-        <section className="space-y-6 lg:col-span-8">
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+        <section
+          className="animate-fade-in-up space-y-6 lg:col-span-8"
+          style={{ animationDelay: "120ms" }}
+        >
+          <div className="af-card rounded-2xl p-5">
             {!selectedAgent ? (
-              <p className="text-sm text-slate-400">
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
                 Select or create an agent to start a conversation.
               </p>
             ) : (
-              <>
-                <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-3">
+              <div key={selectedAgent.id} className="animate-fade-in">
+                <div
+                  className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b pb-4"
+                  style={{ borderColor: "var(--border-subtle)" }}
+                >
                   <div>
-                    <h2 className="text-lg font-semibold text-white">
+                    <h2
+                      className="font-display text-lg font-bold tracking-tight"
+                      style={{ color: "var(--text-primary)" }}
+                    >
                       {selectedAgent.name}
                     </h2>
-                    <p className="text-xs text-slate-400">
+                    <p
+                      className="mt-0.5 text-xs"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
                       {selectedAgent.description || "No description"} ·{" "}
-                      <span className="font-mono text-sky-300">
+                      <span
+                        className="font-mono-tech font-medium"
+                        style={{ color: "var(--text-primary)" }}
+                      >
                         {selectedAgent.model}
                       </span>
                     </p>
@@ -439,14 +678,26 @@ export default function AgentFlowPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="flex gap-1.5">
                       {selectedAgent.enabledTools.length === 0 ? (
-                        <span className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">
+                        <span
+                          className="font-mono-tech rounded-md border px-2.5 py-0.5 text-xs"
+                          style={{
+                            backgroundColor: "var(--badge-bg)",
+                            borderColor: "var(--border-subtle)",
+                            color: "var(--text-muted)",
+                          }}
+                        >
                           No tools
                         </span>
                       ) : (
                         selectedAgent.enabledTools.map((t) => (
                           <span
                             key={t}
-                            className="rounded bg-emerald-950 px-2 py-0.5 text-xs text-emerald-300"
+                            className="font-mono-tech rounded-md border px-2.5 py-0.5 text-xs font-medium"
+                            style={{
+                              backgroundColor: "var(--badge-bg)",
+                              borderColor: "var(--badge-border)",
+                              color: "var(--badge-text)",
+                            }}
                           >
                             {t}
                           </span>
@@ -461,7 +712,7 @@ export default function AgentFlowPage() {
                           ? setIsEditing(false)
                           : openEditForm(selectedAgent)
                       }
-                      className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-600"
+                      className="af-btn-secondary rounded-xl px-3 py-1.5 text-xs font-medium"
                     >
                       {isEditing ? "Cancel Edit" : "Edit Agent"}
                     </button>
@@ -470,7 +721,12 @@ export default function AgentFlowPage() {
                       type="button"
                       disabled={isDeleting}
                       onClick={() => void handleDeleteAgent(selectedAgent)}
-                      className="rounded-lg border border-red-500/40 bg-red-950/50 px-3 py-1.5 text-xs font-medium text-red-200 hover:bg-red-900/60 disabled:opacity-50"
+                      className="rounded-xl border px-3 py-1.5 text-xs font-medium transition-all duration-200 hover:opacity-90 disabled:opacity-50"
+                      style={{
+                        backgroundColor: "var(--danger-bg)",
+                        borderColor: "var(--danger-border)",
+                        color: "var(--danger-text)",
+                      }}
                     >
                       {isDeleting ? "Deleting..." : "Delete Agent"}
                     </button>
@@ -480,15 +736,21 @@ export default function AgentFlowPage() {
                 {isEditing && (
                   <form
                     onSubmit={handleSaveEdit}
-                    className="mb-4 space-y-3 rounded-lg border border-slate-800 bg-slate-950/80 p-3.5"
+                    className="af-surface-inset animate-slide-reveal mb-5 space-y-3.5 rounded-xl p-4"
                   >
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-sky-400">
+                    <h3
+                      className="font-display text-xs font-semibold uppercase tracking-widest"
+                      style={{ color: "var(--text-primary)" }}
+                    >
                       Edit Agent Configuration
                     </h3>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
-                        <label className="mb-1 block text-xs text-slate-400">
+                        <label
+                          className="mb-1 block text-xs font-medium"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
                           Name
                         </label>
                         <input
@@ -496,21 +758,26 @@ export default function AgentFlowPage() {
                           required
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
-                          className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white focus:border-sky-500 focus:outline-none"
+                          className="af-input w-full rounded-xl px-3 py-1.5 text-sm"
                         />
                       </div>
 
                       <div>
-                        <label className="mb-1 block text-xs text-slate-400">
+                        <label
+                          className="mb-1 block text-xs font-medium"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
                           Model
                         </label>
                         <select
                           value={editModel}
                           onChange={(e) => setEditModel(e.target.value)}
-                          className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white focus:border-sky-500 focus:outline-none"
+                          className="af-input w-full rounded-xl px-3 py-1.5 text-sm"
                         >
                           {!models.some((m) => m.id === editModel) && (
-                            <option value={editModel}>{editModel} (Current)</option>
+                            <option value={editModel}>
+                              {editModel} (Current)
+                            </option>
                           )}
                           {models.map((opt) => (
                             <option
@@ -525,19 +792,25 @@ export default function AgentFlowPage() {
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-xs text-slate-400">
+                      <label
+                        className="mb-1 block text-xs font-medium"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
                         Description
                       </label>
                       <input
                         type="text"
                         value={editDescription}
                         onChange={(e) => setEditDescription(e.target.value)}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white focus:border-sky-500 focus:outline-none"
+                        className="af-input w-full rounded-xl px-3 py-1.5 text-sm"
                       />
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-xs text-slate-400">
+                      <label
+                        className="mb-1 block text-xs font-medium"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
                         System Prompt
                       </label>
                       <textarea
@@ -545,12 +818,15 @@ export default function AgentFlowPage() {
                         required
                         value={editSystemPrompt}
                         onChange={(e) => setEditSystemPrompt(e.target.value)}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-white focus:border-sky-500 focus:outline-none"
+                        className="af-input w-full rounded-xl px-3 py-1.5 text-sm"
                       />
                     </div>
 
                     <div>
-                      <span className="mb-1 block text-xs text-slate-400">
+                      <span
+                        className="mb-1 block text-xs font-medium"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
                         Active Tools
                       </span>
                       <div className="flex flex-wrap gap-2">
@@ -561,11 +837,20 @@ export default function AgentFlowPage() {
                               key={`edit-tool-${tool.id}`}
                               type="button"
                               onClick={() => toggleEditTool(tool.id)}
-                              className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
+                              className="rounded-lg border px-3 py-1 text-xs font-medium transition-all duration-200"
+                              style={
                                 checked
-                                  ? "border-emerald-500 bg-emerald-950/50 text-emerald-200"
-                                  : "border-slate-700 bg-slate-900 text-slate-400"
-                              }`}
+                                  ? {
+                                      backgroundColor: "var(--badge-active-bg)",
+                                      borderColor: "var(--badge-active-border)",
+                                      color: "var(--badge-active-text)",
+                                    }
+                                  : {
+                                      backgroundColor: "var(--bg-secondary)",
+                                      borderColor: "var(--border-default)",
+                                      color: "var(--text-secondary)",
+                                    }
+                              }
                             >
                               {tool.label}
                             </button>
@@ -578,7 +863,7 @@ export default function AgentFlowPage() {
                       <button
                         type="submit"
                         disabled={isSavingEdit}
-                        className="rounded-lg bg-sky-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
+                        className="af-btn-primary rounded-xl px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
                       >
                         {isSavingEdit ? "Saving..." : "Save Changes"}
                       </button>
@@ -586,60 +871,87 @@ export default function AgentFlowPage() {
                   </form>
                 )}
 
-                <form onSubmit={handleRunPrompt} className="flex gap-2">
+                <form onSubmit={handleRunPrompt} className="flex gap-2.5">
                   <input
                     type="text"
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     placeholder="Ask something that uses tools or runbooks, e.g. Calculate (120 * 0.15) + 45"
-                    className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+                    className="af-input flex-1 rounded-xl px-4 py-2.5 text-sm"
                   />
                   <button
                     type="submit"
                     disabled={isRunning || !prompt.trim()}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                    className="af-btn-primary rounded-xl px-5 py-2.5 text-sm font-semibold tracking-tight disabled:opacity-50"
                   >
                     {isRunning ? "Running..." : "Send"}
                   </button>
                 </form>
-              </>
+              </div>
             )}
           </div>
 
           {/* Execution History & Trace Inspector */}
           <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 md:col-span-5">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-300">
-                Executions ({executions.length})
-              </h3>
+            <div className="af-card rounded-2xl p-5 md:col-span-5">
+              <div className="mb-3.5 flex items-center justify-between">
+                <h3
+                  className="font-display text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  Executions ({executions.length})
+                </h3>
+                <span
+                  className="font-mono-tech text-[11px]"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  History
+                </span>
+              </div>
               {executions.length === 0 ? (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                   No executions recorded yet.
                 </p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="space-y-2.5">
                   {executions.map((exec) => {
                     const active = exec.id === selectedExecution?.id;
                     return (
-                      <li key={exec.id}>
+                      <li key={exec.id} className="animate-fade-in">
                         <button
                           type="button"
                           onClick={() => setSelectedExecutionId(exec.id)}
-                          className={`w-full rounded-lg border p-2.5 text-left text-xs transition ${
-                            active
-                              ? "border-sky-500 bg-sky-950/40 text-white"
-                              : "border-slate-800 bg-slate-950/50 text-slate-300 hover:border-slate-700"
+                          className={`w-full rounded-xl p-3 text-left text-xs ${
+                            active ? "af-item-card-active" : "af-item-card"
                           }`}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="font-semibold uppercase">
+                            <span
+                              className="font-mono-tech inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider"
+                              style={{ color: "var(--text-primary)" }}
+                            >
+                              <span
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{
+                                  backgroundColor:
+                                    exec.status === "failed"
+                                      ? "var(--danger-text)"
+                                      : "var(--text-primary)",
+                                }}
+                              />
                               {exec.status}
                             </span>
-                            <span className="text-slate-500">
+                            <span
+                              className="font-mono-tech text-[11px]"
+                              style={{ color: "var(--text-muted)" }}
+                            >
                               {exec.trace.length} steps
                             </span>
                           </div>
-                          <p className="mt-1 line-clamp-2 text-slate-300">
+                          <p
+                            className="mt-1.5 line-clamp-2 text-xs leading-relaxed"
+                            style={{ color: "var(--text-secondary)" }}
+                          >
                             {exec.prompt}
                           </p>
                         </button>
@@ -650,44 +962,85 @@ export default function AgentFlowPage() {
               )}
             </div>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 md:col-span-7">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-300">
-                Execution Trace
-              </h3>
+            <div className="af-card rounded-2xl p-5 md:col-span-7">
+              <div className="mb-3.5 flex items-center justify-between">
+                <h3
+                  className="font-display text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  Execution Trace
+                </h3>
+                {selectedExecution && (
+                  <span
+                    className="font-mono-tech text-[11px]"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    {selectedExecution.trace.length} steps logged
+                  </span>
+                )}
+              </div>
               {!selectedExecution ? (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                   Select an execution to inspect its trace steps.
                 </p>
               ) : (
-                <div className="space-y-4">
+                <div
+                  key={selectedExecution.id}
+                  className="animate-fade-in space-y-4"
+                >
                   {selectedExecution.response && (
-                    <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
-                      <div className="mb-1 text-xs font-semibold text-sky-400">
+                    <div className="af-surface-inset rounded-xl p-3.5">
+                      <div
+                        className="font-display mb-1.5 text-[11px] font-semibold uppercase tracking-widest"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
                         Final Response
                       </div>
-                      <p className="whitespace-pre-wrap text-sm text-slate-100">
+                      <p
+                        className="whitespace-pre-wrap text-sm leading-relaxed"
+                        style={{ color: "var(--text-primary)" }}
+                      >
                         {selectedExecution.response}
                       </p>
                     </div>
                   )}
 
-                  <ol className="space-y-2">
-                    {selectedExecution.trace.map((step) => (
+                  <ol className="space-y-2.5">
+                    {selectedExecution.trace.map((step, idx) => (
                       <li
                         key={`${selectedExecution.id}-${step.step}`}
-                        className="rounded-lg border border-slate-800 bg-slate-950/70 p-2.5 text-xs"
+                        style={{ animationDelay: `${idx * 45}ms` }}
+                        className="af-surface-inset animate-fade-in-up rounded-xl p-3 text-xs"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-mono font-semibold text-amber-300">
+                          <span
+                            className="font-mono-tech font-semibold"
+                            style={{ color: "var(--text-primary)" }}
+                          >
                             #{step.step} · {step.type}
                           </span>
-                          <span className="text-slate-500">
+                          <span
+                            className="font-mono-tech text-[11px]"
+                            style={{ color: "var(--text-muted)" }}
+                          >
                             {new Date(step.timestamp).toLocaleTimeString()}
                           </span>
                         </div>
-                        <p className="mt-1 text-slate-200">{step.summary}</p>
+                        <p
+                          className="mt-1.5 leading-relaxed"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
+                          {step.summary}
+                        </p>
                         {step.payload && (
-                          <pre className="mt-1.5 overflow-x-auto rounded bg-slate-900 p-2 text-[11px] text-slate-400">
+                          <pre
+                            className="font-mono-tech mt-2 overflow-x-auto rounded-lg border p-2.5 text-[11px]"
+                            style={{
+                              backgroundColor: "var(--bg-secondary)",
+                              borderColor: "var(--border-subtle)",
+                              color: "var(--text-secondary)",
+                            }}
+                          >
                             {JSON.stringify(step.payload, null, 2)}
                           </pre>
                         )}
