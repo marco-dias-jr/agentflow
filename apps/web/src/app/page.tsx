@@ -501,7 +501,7 @@ export default function AgentFlowPage() {
           />
 
           <div
-            className="af-surface-inset flex items-center gap-3 rounded-full py-1 pl-3.5 pr-1.5"
+            className="flex items-center gap-3 py-1 pl-3.5 pr-1.5"
           >
             <div className="text-right text-xs leading-tight">
               <div
@@ -572,9 +572,8 @@ export default function AgentFlowPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedAgentId(agent.id)}
-                        className={`w-full rounded-[3px] px-3.5 py-3 text-left ${
-                          active ? "af-item-card-active" : "af-item-card"
-                        }`}
+                        className={`w-full rounded-[3px] px-3.5 py-3 text-left ${active ? "af-item-card-active" : "af-item-card"
+                          }`}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-display font-semibold">
@@ -862,10 +861,10 @@ export default function AgentFlowPage() {
                           {!availableProviders.some(
                             (p) => p.id === editProvider
                           ) && (
-                            <option value={editProvider}>
-                              {editProvider} (Current)
-                            </option>
-                          )}
+                              <option value={editProvider}>
+                                {editProvider} (Current)
+                              </option>
+                            )}
                           {availableProviders.map((prov) => (
                             <option key={`edit-prov-${prov.id}`} value={prov.id}>
                               {prov.label}
@@ -884,10 +883,10 @@ export default function AgentFlowPage() {
                           {!editModelsForProvider.some(
                             (m) => m.id === editModel
                           ) && (
-                            <option value={editModel}>
-                              {editModel} (Current)
-                            </option>
-                          )}
+                              <option value={editModel}>
+                                {editModel} (Current)
+                              </option>
+                            )}
                           {editModelsForProvider.map((opt) => (
                             <option
                               key={`edit-${opt.provider}-${opt.id}`}
@@ -1004,9 +1003,8 @@ export default function AgentFlowPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedExecutionId(exec.id)}
-                          className={`w-full rounded-[3px] p-3 text-left text-xs ${
-                            active ? "af-item-card-active" : "af-item-card"
-                          }`}
+                          className={`w-full rounded-[3px] p-3 text-left text-xs ${active ? "af-item-card-active" : "af-item-card"
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <span
