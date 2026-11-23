@@ -68,6 +68,15 @@ export interface IngestDocumentResponseDTO {
   deduplicated: boolean;
 }
 
+export interface KnowledgeCitationDTO {
+  citation: string;
+  documentId?: string;
+  title: string;
+  chunkIndex: number;
+  score: number;
+  snippet: string;
+}
+
 export interface TraceStepDTO {
   step: number;
   type:
@@ -80,6 +89,7 @@ export interface TraceStepDTO {
   summary: string;
   payload?: Record<string, unknown>;
   timestamp: string;
+  durationMs?: number;
 }
 
 export interface ExecutionDTO {
@@ -363,4 +373,12 @@ export async function uploadDocument(
     }
   );
   return json.data;
+}
+
+export async function deleteDocument(documentId: string): Promise<void> {
+  await apiRequest<unknown>(`/documents/${documentId}`, {
+    method: "DELETE",
+    fallbackError:
+      "We couldn't delete this document right now. Please try again in a moment.",
+  });
 }

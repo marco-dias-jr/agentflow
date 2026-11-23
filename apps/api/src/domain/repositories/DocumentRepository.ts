@@ -7,6 +7,8 @@ export interface ChunkSearchMatch {
   chunkIndex: number;
   content: string;
   score: number;
+  vectorScore?: number;
+  lexicalScore?: number;
 }
 
 export interface DocumentRepository {
@@ -14,6 +16,7 @@ export interface DocumentRepository {
     document: Document,
     chunks: DocumentChunkProps[]
   ): Promise<void>;
+  findByIdForUser(id: string, userId: string): Promise<Document | null>;
   findByUserAndHash(
     userId: string,
     contentHash: string
@@ -24,6 +27,7 @@ export interface DocumentRepository {
     userId: string,
     documentIds: string[]
   ): Promise<string[]>;
+  deleteByIdForUser(id: string, userId: string): Promise<void>;
   setAgentDocuments(
     agentId: string,
     userId: string,

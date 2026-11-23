@@ -65,6 +65,22 @@ class InMemoryDocumentRepository implements DocumentRepository {
     return null;
   }
 
+  public async findByIdForUser(
+    id: string,
+    userId: string
+  ): Promise<Document | null> {
+    const doc = this.documents.get(id);
+    return doc && doc.userId === userId ? doc : null;
+  }
+
+  public async deleteByIdForUser(id: string, userId: string): Promise<void> {
+    const doc = this.documents.get(id);
+    if (doc && doc.userId === userId) {
+      this.documents.delete(id);
+      this.chunks = this.chunks.filter((chunk) => chunk.documentId !== id);
+    }
+  }
+
   public async findAllByUserId(userId: string): Promise<Document[]> {
     return Array.from(this.documents.values()).filter(
       (doc) => doc.userId === userId

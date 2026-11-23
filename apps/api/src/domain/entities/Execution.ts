@@ -6,6 +6,7 @@ export interface TraceStep {
   summary: string;
   payload?: Record<string, unknown>;
   timestamp: string;
+  durationMs?: number;
 }
 
 export interface ExecutionProps {
@@ -103,19 +104,27 @@ export class Execution {
     type: TraceStep["type"],
     summary: string,
     payload?: Record<string, unknown>,
-    now: Date = new Date()
-  ): void {
+    now: Date = new Date(),
+    durationMs?: number
+  ): TraceStep {
     const nextStepNumber = this.trace.length + 1;
-    this.trace.push({
+    const step: TraceStep = {
       step: nextStepNumber,
       type,
       summary,
       payload,
       timestamp: now.toISOString(),
-    });
+      ...(durationMs !== undefined ? { durationMs } : {}),
+    };
+    this.trace.push(step);
+    return step;
   }
 
-  public complete(responseText: string, now: Date = new Date()): void {
+  public complete(
+    responseText: string,
+    now: Date = new Date(),
+    durationMs?: number
+  ): void {
     this.status = "completed";
     this.response = responseText;
     this.completedAt = now;
@@ -123,7 +132,8 @@ export class Execution {
       "assistant_response",
       "Generated final response",
       { responseLength: responseText.length },
-      now
+      now,
+      durationMs
     );
   }
 

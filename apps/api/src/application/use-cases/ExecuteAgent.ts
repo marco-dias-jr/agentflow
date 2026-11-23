@@ -48,28 +48,36 @@ export class ExecuteAgent {
     const toolDefinitions = this.toolExecutor.listDefinitions(agent.enabledTools);
     const maxIterations = command.maxToolIterations ?? 3;
 
+    const executionStartedAt = Date.now();
+
     try {
       let iterations = 0;
 
       while (iterations < maxIterations) {
         iterations += 1;
 
-        execution.addTraceStep(
+        const llmStep = execution.addTraceStep(
           "llm_request",
           `Sending context to LLM (iteration ${iterations})`,
           { messageCount: messages.length, availableTools: toolDefinitions.map((t) => t.name) }
         );
 
-        const output = await this.llmProvider.generate({
-          provider: agent.provider,
-          model: agent.model,
-          messages,
-          tools: toolDefinitions,
-        });
+        const llmStart = Date.now();
+        let output;
+        try {
+          output = await this.llmProvider.generate({
+            provider: agent.provider,
+            model: agent.model,
+            messages,
+            tools: toolDefinitions,
+          });
+        } finally {
+          llmStep.durationMs = Date.now() - llmStart;
+        }
 
         if (output.toolCalls.length === 0) {
           const finalText = output.content ?? "";
-          execution.complete(finalText);
+          execution.complete(finalText, new Date(), Date.now() - executionStartedAt);
           await this.executionRepository.update(execution);
           return execution;
         }
@@ -86,6 +94,7 @@ export class ExecuteAgent {
             { toolCallId: call.id, arguments: call.arguments }
           );
 
+          const toolStart = Date.now();
           const result = await this.toolExecutor.execute(
             call.name,
             call.arguments,
@@ -96,11 +105,28 @@ export class ExecuteAgent {
               documentIds: agent.documentIds,
             }
           );
+          const toolDurationMs = Date.now() - toolStart;
+
+          const toolOutputRecord =
+            result.output && typeof result.output === "object"
+              ? (result.output as Record<string, unknown>)
+              : null;
+          const citations =
+            toolOutputRecord && Array.isArray(toolOutputRecord.citations)
+              ? toolOutputRecord.citations
+              : undefined;
 
           execution.addTraceStep(
             "tool_result",
             `Tool ${call.name} finished execution`,
-            { toolCallId: call.id, isError: Boolean(result.isError), output: result.output }
+            {
+              toolCallId: call.id,
+              isError: Boolean(result.isError),
+              output: result.output,
+              ...(citations ? { citations } : {}),
+            },
+            new Date(),
+            toolDurationMs
           );
 
           messages.push({

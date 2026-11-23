@@ -35,9 +35,24 @@ interface ChunkSearchRow {
   chunk_index: number;
   content: string;
   embedding: number[] | string;
+  fts_rank: number | string | null;
 }
 
-function cosineSimilarity(a: number[], b: number[]): number {
+export interface HybridChunkCandidate {
+  chunkId: string;
+  documentId: string;
+  documentTitle: string;
+  chunkIndex: number;
+  content: string;
+  embedding: number[];
+  ftsRank: number;
+}
+
+const HYBRID_VECTOR_WEIGHT = 0.7;
+const HYBRID_LEXICAL_WEIGHT = 0.3;
+const MIN_HYBRID_SCORE = 0.05;
+
+export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length === 0 || b.length === 0 || a.length !== b.length) {
     return 0;
   }
@@ -59,24 +74,68 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dot / denom;
 }
 
-function lexicalScore(queryText: string, title: string, content: string): number {
-  const terms = queryText
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((term) => term.length >= 2);
+/**
+ * Combines vector cosine similarity with normalized PostgreSQL full-text ranking.
+ * Both signals are normalized to [0, 1] before weighted combination.
+ */
+export function rankHybridChunks(params: {
+  candidates: HybridChunkCandidate[];
+  queryEmbedding: number[];
+  limit?: number;
+}): ChunkSearchMatch[] {
+  const limit = Math.max(1, Math.min(10, Math.floor(params.limit ?? 5)));
+  if (params.candidates.length === 0) {
+    return [];
+  }
 
-  if (terms.length === 0) return 0;
+  const rawScores = params.candidates.map((candidate) => {
+    const vectorSim = Math.max(
+      0,
+      Math.min(1, cosineSimilarity(params.queryEmbedding, candidate.embedding))
+    );
+    const ftsRank = Math.max(
+      0,
+      Number.isFinite(candidate.ftsRank) ? candidate.ftsRank : 0
+    );
+    return { candidate, vectorSim, ftsRank };
+  });
 
-  const haystack = `${title} ${content}`.toLowerCase();
-  let matched = 0;
-  for (const term of terms) {
-    if (haystack.includes(term)) {
-      matched += 1;
+  const maxFtsRank = rawScores.reduce(
+    (max, item) => (item.ftsRank > max ? item.ftsRank : max),
+    0
+  );
+
+  const scored: ChunkSearchMatch[] = [];
+
+  for (const item of rawScores) {
+    const normalizedLexical =
+      maxFtsRank > 0 ? item.ftsRank / maxFtsRank : 0;
+    const normalizedVector = item.vectorSim;
+
+    const hybridScore =
+      normalizedVector * HYBRID_VECTOR_WEIGHT +
+      normalizedLexical * HYBRID_LEXICAL_WEIGHT;
+
+    if (hybridScore >= MIN_HYBRID_SCORE || normalizedLexical > 0) {
+      scored.push({
+        chunkId: item.candidate.chunkId,
+        documentId: item.candidate.documentId,
+        documentTitle: item.candidate.documentTitle,
+        chunkIndex: item.candidate.chunkIndex,
+        content: item.candidate.content,
+        score: Number(hybridScore.toFixed(4)),
+        vectorScore: Number(normalizedVector.toFixed(4)),
+        lexicalScore: Number(normalizedLexical.toFixed(4)),
+      });
     }
   }
 
-  return matched / terms.length;
+  return scored
+    .sort(
+      (a, b) =>
+        b.score - a.score || a.chunkIndex - b.chunkIndex
+    )
+    .slice(0, limit);
 }
 
 export class PostgresDocumentRepository implements DocumentRepository {
@@ -144,6 +203,26 @@ export class PostgresDocumentRepository implements DocumentRepository {
     } finally {
       client.release();
     }
+  }
+
+  public async findByIdForUser(
+    id: string,
+    userId: string
+  ): Promise<Document | null> {
+    const result = await this.pool.query<DocumentRow>(
+      `
+        select id, user_id, title, file_name, mime_type, content_hash, chunk_count,
+               parser_strategy, chunk_strategy, chunk_size, chunk_overlap,
+               embedding_provider, embedding_model, created_at
+        from documents
+        where id = $1 and user_id = $2
+        limit 1
+      `,
+      [id, userId]
+    );
+
+    const row = result.rows[0];
+    return row ? this.mapRowToEntity(row) : null;
   }
 
   public async findByUserAndHash(
@@ -226,6 +305,16 @@ export class PostgresDocumentRepository implements DocumentRepository {
     return result.rows.map((row) => row.id);
   }
 
+  public async deleteByIdForUser(id: string, userId: string): Promise<void> {
+    await this.pool.query(
+      `
+        delete from documents
+        where id = $1 and user_id = $2
+      `,
+      [id, userId]
+    );
+  }
+
   public async setAgentDocuments(
     agentId: string,
     userId: string,
@@ -303,6 +392,7 @@ export class PostgresDocumentRepository implements DocumentRepository {
     }
 
     const limit = Math.max(1, Math.min(10, Math.floor(params.limit ?? 5)));
+    const normalizedQueryText = params.queryText.trim();
 
     const result = await this.pool.query<ChunkSearchRow>(
       `
@@ -312,54 +402,53 @@ export class PostgresDocumentRepository implements DocumentRepository {
           d.title as document_title,
           c.chunk_index,
           c.content,
-          c.embedding
+          c.embedding,
+          case
+            when $3 = '' then 0
+            else ts_rank_cd(
+              to_tsvector('english', coalesce(d.title, '') || ' ' || c.content),
+              plainto_tsquery('english', $3)
+            )
+          end as fts_rank
         from document_chunks c
         inner join documents d on d.id = c.document_id
         where c.user_id = $1
           and d.user_id = $1
           and c.document_id = any($2::text[])
       `,
-      [params.userId, uniqueIds]
+      [params.userId, uniqueIds, normalizedQueryText]
     );
 
-    const scored: ChunkSearchMatch[] = [];
-
-    for (const row of result.rows) {
+    const candidates: HybridChunkCandidate[] = result.rows.map((row) => {
       const chunkEmbedding = Array.isArray(row.embedding)
         ? row.embedding
         : typeof row.embedding === "string"
           ? (JSON.parse(row.embedding) as number[])
           : [];
 
-      const vectorSim = Math.max(
-        0,
-        cosineSimilarity(params.queryEmbedding, chunkEmbedding)
-      );
-      const lexical = lexicalScore(
-        params.queryText,
-        row.document_title,
-        row.content
-      );
+      const ftsRank =
+        typeof row.fts_rank === "number"
+          ? row.fts_rank
+          : typeof row.fts_rank === "string"
+            ? Number.parseFloat(row.fts_rank) || 0
+            : 0;
 
-      // Combine vector similarity with lexical term-match boost
-      const combinedScore =
-        vectorSim > 0
-          ? vectorSim * 0.75 + lexical * 0.25
-          : lexical * 0.65;
+      return {
+        chunkId: row.chunk_id,
+        documentId: row.document_id,
+        documentTitle: row.document_title,
+        chunkIndex: row.chunk_index,
+        content: row.content,
+        embedding: chunkEmbedding,
+        ftsRank,
+      };
+    });
 
-      if (combinedScore >= 0.08 || lexical > 0) {
-        scored.push({
-          chunkId: row.chunk_id,
-          documentId: row.document_id,
-          documentTitle: row.document_title,
-          chunkIndex: row.chunk_index,
-          content: row.content,
-          score: Number(combinedScore.toFixed(4)),
-        });
-      }
-    }
-
-    return scored.sort((a, b) => b.score - a.score).slice(0, limit);
+    return rankHybridChunks({
+      candidates,
+      queryEmbedding: params.queryEmbedding,
+      limit,
+    });
   }
 
   private mapRowToEntity(row: DocumentRow): Document {

@@ -11,6 +11,7 @@ import { RequestPasswordReset } from "./application/use-cases/auth/RequestPasswo
 import { ResetPassword } from "./application/use-cases/auth/ResetPassword";
 import { CreateAgent } from "./application/use-cases/CreateAgent";
 import { DeleteAgent } from "./application/use-cases/DeleteAgent";
+import { DeleteDocument } from "./application/use-cases/DeleteDocument";
 import { ExecuteAgent } from "./application/use-cases/ExecuteAgent";
 import { GetExecutionHistory } from "./application/use-cases/GetExecutionHistory";
 import { IngestDocument } from "./application/use-cases/IngestDocument";
@@ -52,6 +53,7 @@ import {
   RESET_PASSWORD_USE_CASE_TOKEN,
 } from "./presentation/controllers/AuthController";
 import {
+  DELETE_DOCUMENT_USE_CASE_TOKEN,
   DOCUMENT_REPOSITORY_TOKEN,
   DocumentsController,
   INGEST_DOCUMENT_USE_CASE_TOKEN,
@@ -144,6 +146,12 @@ const EMBEDDING_PROVIDER_TOKEN = Symbol("EMBEDDING_PROVIDER_TOKEN");
         TEXT_CHUNKER_TOKEN,
         EMBEDDING_PROVIDER_TOKEN,
       ],
+    },
+    {
+      provide: DELETE_DOCUMENT_USE_CASE_TOKEN,
+      useFactory: (documentRepo: DocumentRepository) =>
+        new DeleteDocument(documentRepo),
+      inject: [DOCUMENT_REPOSITORY_TOKEN],
     },
     {
       provide: PASSWORD_HASHER_TOKEN,

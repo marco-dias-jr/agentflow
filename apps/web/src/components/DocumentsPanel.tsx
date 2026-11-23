@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, FileText, FileUp, Upload, X } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, FileUp, Trash2, Upload, X } from "lucide-react";
 import { AlertBanner } from "@/components/ui/AlertBanner";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -15,6 +15,7 @@ import {
 interface DocumentsPanelProps {
   documents: DocumentDTO[];
   onDocumentUploaded: (doc: DocumentDTO, deduplicated: boolean) => void;
+  onDeleteDocument?: (doc: DocumentDTO) => Promise<void>;
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -37,6 +38,7 @@ function fileToBase64(file: File): Promise<string> {
 export function DocumentsPanel({
   documents,
   onDocumentUploaded,
+  onDeleteDocument,
 }: DocumentsPanelProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [title, setTitle] = useState("");
@@ -58,10 +60,34 @@ export function DocumentsPanel({
   const [embeddingModel, setEmbeddingModel] = useState("");
 
   const [isUploading, setIsUploading] = useState(false);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{
     variant: "info" | "error";
     message: string;
   } | null>(null);
+
+  async function handleDelete(doc: DocumentDTO) {
+    if (!onDeleteDocument) return;
+    setFeedback(null);
+    setDeletingDocId(doc.id);
+    try {
+      await onDeleteDocument(doc);
+      setFeedback({
+        variant: "info",
+        message: `Deleted "${doc.title}" from your account.`,
+      });
+    } catch (err) {
+      setFeedback({
+        variant: "error",
+        message: getUserFriendlyError(
+          err,
+          "We couldn't delete this document right now. Please try again."
+        ),
+      });
+    } finally {
+      setDeletingDocId(null);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -357,12 +383,27 @@ export function DocumentsPanel({
                       {doc.title}
                     </span>
                   </div>
-                  <span
-                    className="font-mono-tech shrink-0 text-[10px]"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {doc.chunkCount} chunks
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span
+                      className="font-mono-tech text-[10px]"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {doc.chunkCount} chunks
+                    </span>
+                    {onDeleteDocument && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(doc)}
+                        disabled={deletingDocId === doc.id}
+                        className="rounded p-1 opacity-70 transition-opacity hover:opacity-100 disabled:opacity-40"
+                        style={{ color: "var(--danger-text)" }}
+                        title="Delete document"
+                        aria-label={`Delete ${doc.title}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div
                   className="font-mono-tech mt-1 flex flex-wrap items-center justify-between gap-1 text-[10px]"

@@ -11,6 +11,15 @@ export interface KnowledgeDocument {
   tags: string[];
 }
 
+export interface KnowledgeCitation {
+  citation: string;
+  documentId?: string;
+  title: string;
+  chunkIndex: number;
+  score: number;
+  snippet: string;
+}
+
 export interface KnowledgeSearchMatch {
   id: string;
   documentId?: string;
@@ -18,12 +27,34 @@ export interface KnowledgeSearchMatch {
   chunkIndex?: number;
   content: string;
   score: number;
+  vectorScore?: number;
+  lexicalScore?: number;
+  citation: string;
+  snippet: string;
 }
 
 export interface KnowledgeSearchOutput {
   query: string;
   matches: KnowledgeSearchMatch[];
+  citations?: KnowledgeCitation[];
   message?: string;
+}
+
+export function formatCitationLabel(title: string, chunkIndex = 0): string {
+  const safeTitle = title.trim() || "Untitled Document";
+  const chunkNumber = Math.max(1, Math.floor(chunkIndex) + 1);
+  return `[${safeTitle}, Chunk #${chunkNumber}]`;
+}
+
+export function formatSnippetPreview(
+  content: string,
+  maxLength = 200
+): string {
+  const collapsed = content.replace(/\s+/g, " ").trim();
+  if (collapsed.length <= maxLength) {
+    return collapsed;
+  }
+  return `${collapsed.slice(0, Math.max(1, maxLength - 3)).trimEnd()}...`;
 }
 
 export interface KnowledgeSearchDependencies {
@@ -216,6 +247,14 @@ export class KnowledgeSearchTool implements AgentTool {
           chunkIndex: match.chunkIndex,
           content: match.content,
           score: match.score,
+          ...(match.vectorScore !== undefined
+            ? { vectorScore: match.vectorScore }
+            : {}),
+          ...(match.lexicalScore !== undefined
+            ? { lexicalScore: match.lexicalScore }
+            : {}),
+          citation: formatCitationLabel(match.documentTitle, match.chunkIndex),
+          snippet: formatSnippetPreview(match.content),
         });
       }
     }
@@ -228,6 +267,7 @@ export class KnowledgeSearchTool implements AgentTool {
       return {
         query,
         matches: [],
+        citations: [],
         message:
           "No relevant passages were found in the documents linked to this agent.",
       };
@@ -236,6 +276,14 @@ export class KnowledgeSearchTool implements AgentTool {
     return {
       query,
       matches: ranked,
+      citations: ranked.map((match) => ({
+        citation: match.citation,
+        documentId: match.documentId,
+        title: match.title,
+        chunkIndex: match.chunkIndex ?? 0,
+        score: match.score,
+        snippet: match.snippet,
+      })),
     };
   }
 
@@ -258,9 +306,13 @@ export class KnowledgeSearchTool implements AgentTool {
         );
         return {
           id: doc.id,
+          documentId: doc.id,
           title: doc.title,
+          chunkIndex: 0,
           content: doc.content,
           score,
+          citation: formatCitationLabel(doc.title, 0),
+          snippet: formatSnippetPreview(doc.content),
         };
       })
       .filter((item) => item.score > 0)
@@ -270,6 +322,14 @@ export class KnowledgeSearchTool implements AgentTool {
     return {
       query,
       matches: scored,
+      citations: scored.map((match) => ({
+        citation: match.citation,
+        documentId: match.documentId,
+        title: match.title,
+        chunkIndex: match.chunkIndex ?? 0,
+        score: match.score,
+        snippet: match.snippet,
+      })),
     };
   }
 }

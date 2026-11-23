@@ -2,12 +2,18 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Inject,
+  NotFoundException,
+  Param,
   Post,
   Req,
   UseGuards,
 } from "@nestjs/common";
+import { DeleteDocument } from "../../application/use-cases/DeleteDocument";
 import { IngestDocument } from "../../application/use-cases/IngestDocument";
 import { DocumentRepository } from "../../domain/repositories/DocumentRepository";
 import { ingestDocumentSchema } from "../dto/IngestDocumentDto";
@@ -16,6 +22,9 @@ import { AuthenticatedRequest, AuthGuard } from "../security/AuthGuard";
 export const DOCUMENT_REPOSITORY_TOKEN = Symbol("DOCUMENT_REPOSITORY_TOKEN");
 export const INGEST_DOCUMENT_USE_CASE_TOKEN = Symbol(
   "INGEST_DOCUMENT_USE_CASE_TOKEN"
+);
+export const DELETE_DOCUMENT_USE_CASE_TOKEN = Symbol(
+  "DELETE_DOCUMENT_USE_CASE_TOKEN"
 );
 
 const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -26,6 +35,8 @@ export class DocumentsController {
   constructor(
     @Inject(INGEST_DOCUMENT_USE_CASE_TOKEN)
     private readonly ingestDocumentUseCase: IngestDocument,
+    @Inject(DELETE_DOCUMENT_USE_CASE_TOKEN)
+    private readonly deleteDocumentUseCase: DeleteDocument,
     @Inject(DOCUMENT_REPOSITORY_TOKEN)
     private readonly documentRepository: DocumentRepository
   ) {}
@@ -110,5 +121,24 @@ export class DocumentsController {
       req.user!.id
     );
     return { data: documents };
+  }
+
+  @Delete(":id")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  public async remove(
+    @Param("id") id: string,
+    @Req() req: AuthenticatedRequest
+  ) {
+    try {
+      await this.deleteDocumentUseCase.execute(id, req.user!.id);
+      console.log(`[API] Deleted document ${id} (user=${req.user!.id})`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to delete document";
+      if (message.startsWith("Document not found:")) {
+        throw new NotFoundException(message);
+      }
+      throw new BadRequestException(message);
+    }
   }
 }

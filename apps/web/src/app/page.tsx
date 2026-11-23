@@ -15,17 +15,20 @@ import {
   AgentDTO,
   createAgent,
   deleteAgent,
+  deleteDocument,
   DocumentDTO,
   executeAgentPrompt,
   ExecutionDTO,
   getMe,
   getUserFriendlyError,
+  KnowledgeCitationDTO,
   listAgents,
   listDocuments,
   listExecutions,
   listModels,
   logoutAccount,
   ModelOptionDTO,
+  TraceStepDTO,
   updateAgent,
   UserProfileDTO,
 } from "@/lib/api";
@@ -39,6 +42,33 @@ function formatShortName(fullName?: string): string {
   if (!fullName) return "";
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1]}` : parts[0] || "";
+}
+
+function extractStepCitations(step: TraceStepDTO): KnowledgeCitationDTO[] {
+  if (!step.payload) return [];
+
+  const direct = step.payload.citations;
+  const outputObj =
+    step.payload.output && typeof step.payload.output === "object"
+      ? (step.payload.output as Record<string, unknown>)
+      : null;
+  const rawList = Array.isArray(direct)
+    ? direct
+    : outputObj && Array.isArray(outputObj.citations)
+      ? outputObj.citations
+      : outputObj && Array.isArray(outputObj.matches)
+        ? outputObj.matches
+        : [];
+
+  return rawList.filter((item): item is KnowledgeCitationDTO => {
+    if (!item || typeof item !== "object") return false;
+    const record = item as Record<string, unknown>;
+    return (
+      typeof record.citation === "string" &&
+      typeof record.score === "number" &&
+      typeof record.snippet === "string"
+    );
+  });
 }
 
 export default function AgentFlowPage() {
@@ -328,6 +358,19 @@ export default function AgentFlowPage() {
     });
   }
 
+  async function handleDeleteDocument(doc: DocumentDTO) {
+    await deleteDocument(doc.id);
+    setDocuments((prev) => prev.filter((item) => item.id !== doc.id));
+    setCreateDocumentIds((prev) => prev.filter((id) => id !== doc.id));
+    setEditDocumentIds((prev) => prev.filter((id) => id !== doc.id));
+    setAgents((prev) =>
+      prev.map((agent) => ({
+        ...agent,
+        documentIds: (agent.documentIds ?? []).filter((id) => id !== doc.id),
+      }))
+    );
+  }
+
   async function handleCreateAgent(e: FormEvent) {
     e.preventDefault();
     if (!provider || !model) {
@@ -474,16 +517,6 @@ export default function AgentFlowPage() {
                 AgentFlow
               </h1>
             </div>
-            <span
-              className="font-mono-tech rounded-md border px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest"
-              style={{
-                backgroundColor: "var(--badge-bg)",
-                borderColor: "var(--badge-border)",
-                color: "var(--text-secondary)",
-              }}
-            >
-              AI Agent Platform
-            </span>
           </div>
           <p
             className="mt-0.5 text-sm"
@@ -722,6 +755,7 @@ export default function AgentFlowPage() {
           <DocumentsPanel
             documents={documents}
             onDocumentUploaded={handleDocumentUploaded}
+            onDeleteDocument={handleDeleteDocument}
           />
         </section>
 
@@ -1087,46 +1121,110 @@ export default function AgentFlowPage() {
                   )}
 
                   <ol className="space-y-2.5">
-                    {selectedExecution.trace.map((step, idx) => (
-                      <li
-                        key={`${selectedExecution.id}-${step.step}`}
-                        style={{ animationDelay: `${idx * 45}ms` }}
-                        className="af-surface-inset animate-fade-in-up rounded-[3px] p-3 text-xs"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span
-                            className="font-mono-tech font-semibold"
-                            style={{ color: "var(--text-primary)" }}
-                          >
-                            #{step.step} · {step.type}
-                          </span>
-                          <span
-                            className="font-mono-tech text-[11px]"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            {new Date(step.timestamp).toLocaleTimeString()}
-                          </span>
-                        </div>
-                        <p
-                          className="mt-1.5 leading-relaxed"
-                          style={{ color: "var(--text-secondary)" }}
+                    {selectedExecution.trace.map((step, idx) => {
+                      const citations = extractStepCitations(step);
+                      return (
+                        <li
+                          key={`${selectedExecution.id}-${step.step}`}
+                          style={{ animationDelay: `${idx * 45}ms` }}
+                          className="af-surface-inset animate-fade-in-up rounded-[3px] p-3 text-xs"
                         >
-                          {step.summary}
-                        </p>
-                        {step.payload && (
-                          <pre
-                            className="font-mono-tech mt-2 overflow-x-auto rounded-[3px] border p-2.5 text-[11px]"
-                            style={{
-                              backgroundColor: "var(--bg-secondary)",
-                              borderColor: "var(--border-subtle)",
-                              color: "var(--text-secondary)",
-                            }}
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className="font-mono-tech font-semibold"
+                              style={{ color: "var(--text-primary)" }}
+                            >
+                              #{step.step} · {step.type}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {step.durationMs !== undefined && (
+                                <span
+                                  className="font-mono-tech rounded border px-1.5 py-0.5 text-[10px]"
+                                  style={{
+                                    backgroundColor: "var(--badge-bg)",
+                                    borderColor: "var(--badge-border)",
+                                    color: "var(--text-secondary)",
+                                  }}
+                                >
+                                  {step.durationMs}ms
+                                </span>
+                              )}
+                              <span
+                                className="font-mono-tech text-[11px]"
+                                style={{ color: "var(--text-muted)" }}
+                              >
+                                {new Date(step.timestamp).toLocaleTimeString()}
+                              </span>
+                            </div>
+                          </div>
+                          <p
+                            className="mt-1.5 leading-relaxed"
+                            style={{ color: "var(--text-secondary)" }}
                           >
-                            {JSON.stringify(step.payload, null, 2)}
-                          </pre>
-                        )}
-                      </li>
-                    ))}
+                            {step.summary}
+                          </p>
+                          {citations.length > 0 && (
+                            <div className="mt-2.5 space-y-1.5">
+                              <div
+                                className="font-display text-[10px] font-semibold uppercase tracking-widest"
+                                style={{ color: "var(--text-muted)" }}
+                              >
+                                Verifiable Citations ({citations.length})
+                              </div>
+                              <ul className="space-y-1.5">
+                                {citations.map((item, cIdx) => (
+                                  <li
+                                    key={`${step.step}-citation-${cIdx}`}
+                                    className="rounded-[3px] border p-2"
+                                    style={{
+                                      backgroundColor: "var(--bg-secondary)",
+                                      borderColor: "var(--border-subtle)",
+                                    }}
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <span
+                                        className="font-mono-tech text-[11px] font-semibold"
+                                        style={{ color: "var(--text-primary)" }}
+                                      >
+                                        {item.citation}
+                                      </span>
+                                      <span
+                                        className="font-mono-tech rounded border px-1.5 py-0.5 text-[10px]"
+                                        style={{
+                                          backgroundColor: "var(--badge-bg)",
+                                          borderColor: "var(--badge-border)",
+                                          color: "var(--badge-text)",
+                                        }}
+                                      >
+                                        Score: {item.score.toFixed(2)}
+                                      </span>
+                                    </div>
+                                    <p
+                                      className="mt-1 text-[11px] leading-relaxed"
+                                      style={{ color: "var(--text-secondary)" }}
+                                    >
+                                      {item.snippet}
+                                    </p>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {step.payload && (
+                            <pre
+                              className="font-mono-tech mt-2 overflow-x-auto rounded-[3px] border p-2.5 text-[11px]"
+                              style={{
+                                backgroundColor: "var(--bg-secondary)",
+                                borderColor: "var(--border-subtle)",
+                                color: "var(--text-secondary)",
+                              }}
+                            >
+                              {JSON.stringify(step.payload, null, 2)}
+                            </pre>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ol>
                 </div>
               )}
