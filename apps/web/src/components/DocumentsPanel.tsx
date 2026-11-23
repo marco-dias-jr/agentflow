@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, FileText, Upload } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, FileUp, Upload, X } from "lucide-react";
 import { AlertBanner } from "@/components/ui/AlertBanner";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -160,10 +160,48 @@ export function DocumentsPanel({
           <input
             ref={fileInputRef}
             type="file"
+            id="document-file-input"
             accept=".txt,.md,.markdown,.csv,.json,.log,.pdf,text/plain,text/markdown,text/csv,application/json,application/pdf"
             onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-            className="af-input block w-full cursor-pointer rounded-[3px] px-3 py-1.5 text-xs"
+            className="sr-only"
           />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="af-btn-secondary inline-flex items-center gap-1.5 rounded-[3px] border px-3 py-1.5 text-xs font-medium transition-colors hover:opacity-90"
+              style={{ borderColor: "var(--border-default)" }}
+            >
+              <FileUp className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>{selectedFile ? "Change file" : "Choose file"}</span>
+            </button>
+            {selectedFile ? (
+              <div className="flex min-w-0 flex-1 items-center justify-between gap-1 rounded-[3px] px-2 py-1 text-xs" style={{ backgroundColor: "var(--bg-tertiary)", border: "1px solid var(--border-subtle)" }}>
+                <span className="truncate" title={selectedFile.name} style={{ color: "var(--text-primary)" }}>
+                  {selectedFile.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedFile(null);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = "";
+                    }
+                  }}
+                  className="rounded p-0.5 text-xs opacity-70 transition-opacity hover:opacity-100"
+                  style={{ color: "var(--text-muted)" }}
+                  title="Remove selected file"
+                  aria-label="Remove selected file"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
+              <span className="truncate text-xs" style={{ color: "var(--text-muted)" }}>
+                No file chosen
+              </span>
+            )}
+          </div>
         </div>
 
         <div>

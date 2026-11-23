@@ -958,6 +958,7 @@ export default function AgentFlowPage() {
                     type="text"
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
+                    disabled={isRunning}
                     placeholder="Ask something that uses tools or runbooks, e.g. Calculate (120 * 0.15) + 45"
                     className="flex-1 px-4 py-2.5"
                   />
